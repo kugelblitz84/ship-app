@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserEmail() {
+      return isSignedIn() ? request.auth.token.email : null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+          currentUserEmail() != null &&
+          exists(/databases/$(database)/documents/admins/$(currentUserEmail())) &&
+          get(/databases/$(database)/documents/admins/$(currentUserEmail())).data.isAdmin == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /admins/{email} {
+      allow read: if isAdmin() || (isSignedIn() && currentUserEmail() == email);
+      allow write: if false;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if isOwner(uid) || isAdmin();
+
+      match /{document=**} {
+        allow read: if isOwner(uid) || isAdmin();
+        allow write: if isOwner(uid);
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
