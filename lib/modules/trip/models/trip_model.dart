@@ -87,9 +87,7 @@ class TripModel {
       );
       if (quantity != null) {
         final computed = rate * quantity;
-        totalBillValue = computed % 1 == 0
-            ? computed.toInt().toString()
-            : computed.toStringAsFixed(2);
+        totalBillValue = computed.toInt().toString();
       }
     }
 

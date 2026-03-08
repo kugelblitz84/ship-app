@@ -8,7 +8,6 @@ import '../../core/services/firestore_services/companydata_service.dart';
 import '../../core/services/firestore_services/shipdata_service.dart';
 import '../../core/services/firestore_services/transactiondata_service.dart';
 import '../../core/services/firestore_services/tripdata_service.dart';
-import '../../core/services/firestore_services/user_access_service.dart';
 import '../../core/services/firestore_services/userdata_service.dart';
 import '../../routes/app_routes.dart';
 import '../company/models/company_model.dart';
@@ -22,7 +21,6 @@ class HomeController extends GetxController {
   final Rxn<HomeModel> homeModel = Rxn<HomeModel>();
   final AuthService _auth = Get.find<AuthService>();
   final AdminAccessService _adminAccessService = Get.find<AdminAccessService>();
-  final UserAccessService _userAccessService = Get.find<UserAccessService>();
   final FirestoreUserService _firestore = Get.find<FirestoreUserService>();
   final FirestoreShipService _shipService = Get.find<FirestoreShipService>();
   final FirestoreCompanyService _companyService =
@@ -49,9 +47,13 @@ class HomeController extends GetxController {
       homeModel.value?.recentTransactions ?? const [];
 
   // ── Recent Items ─────────────────────────────────────────────────────
-  final RxList<TransactionModel> allTransactions = <TransactionModel>[].obs;
-  final RxList<TripModel> allTrips = <TripModel>[].obs;
-  List<CompanyModel> companies = [];
+  final RxList<TransactionModel> _allTransactions = <TransactionModel>[].obs;
+  final RxList<TripModel> _allTrips = <TripModel>[].obs;
+  List<CompanyModel> _companies = [];
+
+  List<TransactionModel> get allTransactions => _allTransactions;
+  List<TripModel> get allTrips => _allTrips;
+  List<CompanyModel> get companies => _companies;
 
   @override
   void onInit() {
@@ -68,14 +70,6 @@ class HomeController extends GetxController {
 
     isLoading.value = true;
     try {
-      // final blocked = await _userAccessService.isCurrentUserBlocked();
-      // if (blocked) {
-      //   _adminAccessService.clear();
-      //   isAdmin.value = false;
-      //   Get.offAllNamed(AppRoutes.lockedAccount);
-      //   return;
-      // }
-
       isAdmin.value = await _adminAccessService.refreshCurrentUserRole();
 
       // ── Load user profile ──────────────────────────────────────────
@@ -125,8 +119,8 @@ class HomeController extends GetxController {
       showErrorSnackbar: false,
     );
     if (response.isSuccess && response.data != null) {
-      companies = response.data!;
-      _updateHomeModel(companyCount: companies.length);
+      _companies = response.data!;
+      _updateHomeModel(companyCount: _companies.length);
     }
   }
 
@@ -139,7 +133,7 @@ class HomeController extends GetxController {
     if (response.isSuccess && response.data != null) {
       final trips = response.data!;
       _updateHomeModel(tripCount: trips.length);
-      allTrips.assignAll(trips);
+      _allTrips.assignAll(trips);
       _updateHomeModel(recentTrips: trips.take(5).toList());
     }
   }
@@ -153,7 +147,7 @@ class HomeController extends GetxController {
     if (response.isSuccess && response.data != null) {
       final transactions = response.data!;
       _updateHomeModel(transactionCount: transactions.length);
-      allTransactions.assignAll(transactions);
+      _allTransactions.assignAll(transactions);
       _updateHomeModel(recentTransactions: transactions.take(5).toList());
     }
   }
@@ -165,7 +159,7 @@ class HomeController extends GetxController {
 
     // ── Lifetime balance (cash-in-hand): payments − main-balance expenses
     final totalFundReceivedValue = _sumTransactions(
-      allTransactions,
+      _allTransactions,
       payments: true,
       mainBalanceExpenses: true,
     );
@@ -174,12 +168,12 @@ class HomeController extends GetxController {
     final now = DateTime.now();
 
     // Monthly billed = sum of trip bills this month
-    final monthlyFundOwedValue = allTrips
+    final monthlyFundOwedValue = _allTrips
         .where((t) => _isCurrentMonth(t.date, now))
         .fold(0, (sum, t) => sum + _toInt(t.totalBill));
 
     // Filter transactions to current month
-    final monthlyTx = allTransactions
+    final monthlyTx = _allTransactions
         .where((t) => _isCurrentMonth(t.date, now))
         .toList();
 
@@ -245,7 +239,7 @@ class HomeController extends GetxController {
 
   /// Sum a numeric string field across all loaded companies.
   int _sumCompanyField(String Function(CompanyModel) selector) {
-    return companies.fold(0, (sum, c) => sum + _toInt(selector(c)));
+    return _companies.fold(0, (sum, c) => sum + _toInt(selector(c)));
   }
 
   /// Compute cash-in-hand from a list of transactions:

@@ -690,10 +690,7 @@ double _toDouble(String value) {
 }
 
 String _formatAmount(double value) {
-  if (value % 1 == 0) {
-    return value.toStringAsFixed(0);
-  }
-  return value.toStringAsFixed(2);
+  return value.toInt().toString();
 }
 
 String _formatDate(String rawDate) {

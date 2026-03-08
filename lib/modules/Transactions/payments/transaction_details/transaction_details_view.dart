@@ -412,10 +412,7 @@ double _toDouble(String value) {
 }
 
 String _formatAmount(double value) {
-  if (value % 1 == 0) {
-    return value.toInt().toString();
-  }
-  return value.toStringAsFixed(2);
+  return value.toInt().toString();
 }
 
 String _formatType(String type) {

@@ -1657,10 +1657,7 @@ class HomeView extends GetView<HomeController> {
   }
 
   String _formatCurrency(int value) {
-    return value.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (m) => '${m[1]},',
-    );
+    return value.toString();
   }
 
   IconData _getTransactionTypeIcon(String type) {

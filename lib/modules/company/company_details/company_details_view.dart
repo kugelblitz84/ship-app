@@ -1394,22 +1394,4 @@ double _toDouble(String value) {
 
 String _formatAmount(double value) {
   return value.toInt().toString();
-  if (value >= 1e7) {
-    return '${(value / 1e7).toStringAsFixed(2)} Cr';
-  }
-  if (value >= 1e5) {
-    return '${(value / 1e5).toStringAsFixed(2)} L';
-  }
-  if (value % 1 == 0) {
-    return value.toInt().toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (m) => '${m[1]},',
-    );
-  }
-  return value
-      .toStringAsFixed(2)
-      .replaceAllMapped(
-        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-        (m) => '${m[1]},',
-      );
 }

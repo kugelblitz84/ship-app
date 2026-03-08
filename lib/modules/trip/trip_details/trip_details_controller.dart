@@ -61,10 +61,7 @@ class TripDetailsController extends GetxController {
   }
 
   String _formatAmount(double value) {
-    if (value % 1 == 0) {
-      return value.clamp(0, double.infinity).toInt().toString();
-    }
-    return value.clamp(0, double.infinity).toStringAsFixed(2);
+    return value.clamp(0, double.infinity).toInt().toString();
   }
 
   void startEditing() {

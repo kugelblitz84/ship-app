@@ -62,10 +62,7 @@ class TransactionModel {
     }
 
     String formatAmount(double value) {
-      if (value % 1 == 0) {
-        return value.toInt().toString();
-      }
-      return value.toStringAsFixed(2);
+      return value.toInt().toString();
     }
 
     final companyName = readString(companyAndShipInfoMap['companyName']).trim();

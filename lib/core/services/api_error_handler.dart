@@ -1,8 +1,16 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
+import 'connectivity_watcher_service.dart';
 import '../themes/themes.dart';
 
 class ApiErrorHandler {
+  static bool get _shouldSuppressOfflineSnackbar {
+    if (!Get.isRegistered<ConnectivityWatcherService>()) {
+      return false;
+    }
+    return Get.find<ConnectivityWatcherService>().isOffline;
+  }
+
   static Future<ApiResponse<T>> call<T>(
     Future<T> Function() apiCall, {
     bool showErrorSnackbar = true,
@@ -23,7 +31,7 @@ class ApiErrorHandler {
         "network-request-failed" => "No internet connection",
         _ => e.message ?? "Failed",
       };
-      if (showErrorSnackbar) {
+      if (showErrorSnackbar && !_shouldSuppressOfflineSnackbar) {
         Get.snackbar(
           'Error',
           errorMsg,
@@ -43,12 +51,12 @@ class ApiErrorHandler {
         'invalid-argument' => e.message ?? 'Invalid input provided',
         _ => e.message ?? fallbackMessage,
       };
-      if (showErrorSnackbar) {
+      if (showErrorSnackbar && !_shouldSuppressOfflineSnackbar) {
         Get.snackbar('Error', errorMsg);
       }
       return ApiResponse<T>(error: errorMsg, isSuccess: false);
     } catch (_) {
-      if (showErrorSnackbar) {
+      if (showErrorSnackbar && !_shouldSuppressOfflineSnackbar) {
         Get.snackbar('Error', fallbackMessage);
       }
       return ApiResponse<T>(error: fallbackMessage, isSuccess: false);

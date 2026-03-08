@@ -531,11 +531,7 @@ class _ExpensePdfRow {
 
   static String _formatAmount(String? raw) {
     final parsed = _parseAmount(raw);
-    if (parsed % 1 == 0) {
-      return parsed.toInt().toString();
-    }
-
-    return parsed.toStringAsFixed(2);
+    return parsed.toInt().toString();
   }
 
   static double _parseAmount(String? raw) {
@@ -547,8 +543,5 @@ class _ExpensePdfRow {
 }
 
 String _formatTotalAmount(double amount) {
-  if (amount % 1 == 0) {
-    return 'BDT ${amount.toInt()}';
-  }
-  return 'BDT ${amount.toStringAsFixed(2)}';
+  return 'BDT ${amount.toInt()}';
 }

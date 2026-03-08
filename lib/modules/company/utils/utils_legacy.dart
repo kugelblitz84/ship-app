@@ -1032,12 +1032,7 @@ class CompanyStatementUtil {
   }
 
   static String _currency(double amount) {
-    final formatter = NumberFormat.currency(
-      locale: 'en_US',
-      symbol: 'BDT ',
-      decimalDigits: amount % 1 == 0 ? 0 : 2,
-    );
-    return formatter.format(amount);
+    return 'BDT ${amount.toInt()}';
   }
 
   static String _safe(String value) {
