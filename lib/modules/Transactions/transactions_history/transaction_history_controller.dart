@@ -1,9 +1,11 @@
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/services/api_error_handler.dart';
 import '../../../core/services/firestore_services/transactiondata_service.dart';
 import '../models/transaction_model.dart';
+import '../utils/expenses_hostory_util.dart';
 
 enum TransactionSortOption {
   newest,
@@ -143,6 +145,10 @@ class TransactionHistoryController extends GetxController {
     return filtered;
   }
 
+  List<TransactionModel> get visibleExpenseTransactions => visibleTransactions
+      .where((transaction) => transaction.isExpense)
+      .toList();
+
   bool get hasActiveFilters =>
       searchQuery.value.trim().isNotEmpty ||
       selectedMonth.value != 0 ||
@@ -228,6 +234,53 @@ class TransactionHistoryController extends GetxController {
     includeAddedToDueExpenses.value = true;
     includeMainBalanceExpenses.value = true;
     sortOption.value = TransactionSortOption.newest;
+  }
+
+  Future<void> exportFilteredExpensesPdf() async {
+    if (!showExpensesOnly.value) {
+      Get.snackbar(
+        'Enable Expense Filter',
+        'Turn on Only expenses before exporting PDF.',
+      );
+      return;
+    }
+
+    final expenses = visibleExpenseTransactions;
+    if (expenses.isEmpty) {
+      Get.snackbar('No Expenses', 'No filtered expenses found to export.');
+      return;
+    }
+
+    await ExpensesHistoryUtil.saveExpensesHistoryAndNotify(
+      expenses,
+      dateFilterLabel: _activeDateFilterLabel(),
+    );
+  }
+
+  String _activeDateFilterLabel() {
+    final pickedDate = selectedDate.value;
+    if (pickedDate != null) {
+      return DateFormat('dd MMM yyyy').format(pickedDate);
+    }
+
+    final month = selectedMonth.value;
+    final year = selectedYear.value;
+
+    if (month != 0 && year != 0) {
+      final monthLabel = DateFormat('MMMM').format(DateTime(2000, month));
+      return '$monthLabel $year';
+    }
+
+    if (month != 0) {
+      final monthLabel = DateFormat('MMMM').format(DateTime(2000, month));
+      return '$monthLabel (All years)';
+    }
+
+    if (year != 0) {
+      return 'Year $year';
+    }
+
+    return 'All dates';
   }
 
   DateTime get initialDateForPicker => selectedDate.value ?? DateTime.now();

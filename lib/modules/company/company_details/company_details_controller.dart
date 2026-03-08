@@ -148,7 +148,7 @@ class CompanyDetailsController extends GetxController {
       transactions.assignAll(
         allTransactions.where(
           (transaction) =>
-              _normalize(transaction.companyAndShipInfo.companyName) ==
+              _normalize(transaction.companyAndShipInfo.companyName ?? 'N/A') ==
               _normalize(companyName),
         ),
       );

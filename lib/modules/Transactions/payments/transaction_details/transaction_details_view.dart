@@ -125,14 +125,14 @@ class TransactionDetailsView extends GetView<TransactionDetailsController> {
                       icon: Icons.business_outlined,
                       label: 'Company',
                       value: _safeText(
-                        transaction.companyAndShipInfo.companyName,
+                        transaction.companyAndShipInfo.companyName ?? 'N/A',
                       ),
                     ),
                     _DetailRow(
                       icon: Icons.directions_boat_outlined,
                       label: 'Ship',
                       value: _safeText(
-                        transaction.companyAndShipInfo.shipName ?? '',
+                        transaction.companyAndShipInfo.shipName ?? 'N/A',
                       ),
                     ),
                     if ((transaction.description ?? '').trim().isNotEmpty)

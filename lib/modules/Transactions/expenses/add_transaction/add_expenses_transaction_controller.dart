@@ -175,9 +175,6 @@ class AddExpensesTransactionController extends GetxController {
       return 'Amount must be greater than zero';
     }
 
-    if (isMainBalanceSource && amount > currentMainBalance) {
-      return 'Amount cannot be greater than main balance (৳ ${_formatAmount(currentMainBalance)})';
-    }
     return null;
   }
 
@@ -275,6 +272,12 @@ class AddExpensesTransactionController extends GetxController {
     if (source == null || source.trim().isEmpty) return;
     selectedExpenseSource.value = source;
 
+    if (selectedExpenseSource.value == 'main-balance') {
+      // Main-balance expenses must not keep a company reference.
+      selectedCompany = null;
+      selectedCompanyName.value = null;
+    }
+
     _updateCompanySummary();
     _updateMainBalancePreview();
   }
@@ -325,14 +328,6 @@ class AddExpensesTransactionController extends GetxController {
       final sourceAtSubmit = selectedExpenseSource.value;
       final expenseAmount = _toDouble(amountController.text.trim());
 
-      if (isMainBalanceSource && expenseAmount > currentMainBalance) {
-        Get.snackbar(
-          'Invalid Amount',
-          'Amount cannot be greater than main balance (৳ ${_formatAmount(currentMainBalance)})',
-        );
-        return;
-      }
-
       final company = selectedCompany;
       final companyDue = company == null
           ? 0.0
@@ -343,7 +338,7 @@ class AddExpensesTransactionController extends GetxController {
         transactionType: 'expenses',
         expenseSource: selectedExpenseSource.value,
         companyAndShipInfo: CompanyAndShipInfo(
-          companyName: isCompanySource ? company!.name : (company?.name ?? ''),
+          companyName: isCompanySource ? company!.name : '',
           shipName: selectedShip!.name,
         ),
         description: descriptionController.text.trim(),
@@ -351,11 +346,7 @@ class AddExpensesTransactionController extends GetxController {
         totalPrice: company?.totalAmountBilled ?? '0',
         amountDue: isCompanySource
             ? _formatAmount(companyDue + expenseAmount)
-            : _formatAmount(
-                (currentMainBalance - expenseAmount)
-                    .clamp(0, double.infinity)
-                    .toDouble(),
-              ),
+          : _formatAmount(currentMainBalance - expenseAmount),
         date: dateController.text.trim(),
         type: selectedType.value!.trim(),
       );
@@ -445,11 +436,8 @@ class AddExpensesTransactionController extends GetxController {
     currentMainBalanceDisplay.value = _formatAmount(currentMainBalance);
 
     final enteredAmount = _toDouble(amountController.text);
-    final updated = (currentMainBalance - enteredAmount).clamp(
-      0,
-      double.infinity,
-    );
-    updatedMainBalanceDisplay.value = _formatAmount(updated.toDouble());
+    final updated = currentMainBalance - enteredAmount;
+    updatedMainBalanceDisplay.value = _formatAmount(updated);
   }
 
   double get currentMainBalance {
@@ -465,7 +453,7 @@ class AddExpensesTransactionController extends GetxController {
         total -= amount;
       }
     }
-    return total.clamp(0, double.infinity).toDouble();
+    return total;
   }
 
   double _getSelectedCompanyReceivedAmount() {

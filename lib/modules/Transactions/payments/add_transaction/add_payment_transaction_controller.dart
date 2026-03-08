@@ -484,7 +484,7 @@ class AddTransactionController extends GetxController {
     return transactions
         .where(
           (transaction) =>
-              _normalize(transaction.companyAndShipInfo.companyName) ==
+              _normalize(transaction.companyAndShipInfo.companyName ?? '') ==
               _normalize(companyName),
         )
         .fold<double>(
@@ -509,7 +509,7 @@ class AddTransactionController extends GetxController {
     final fallbackBilled = trips
         .where(
           (trip) =>
-              _normalize(trip.companyAndShipInfo.companyName) ==
+              _normalize(trip.companyAndShipInfo.companyName ?? '') ==
               _normalize(companyName),
         )
         .fold<double>(0, (sum, trip) => sum + _toDouble(trip.totalBill));
@@ -517,7 +517,7 @@ class AddTransactionController extends GetxController {
     final fallbackReceived = transactions
         .where(
           (transaction) =>
-              _normalize(transaction.companyAndShipInfo.companyName) ==
+              _normalize(transaction.companyAndShipInfo.companyName ?? '') ==
               _normalize(companyName),
         )
         .fold<double>(

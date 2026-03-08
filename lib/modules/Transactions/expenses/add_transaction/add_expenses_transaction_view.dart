@@ -67,6 +67,7 @@ class AddExpensesTransactionView
                       onChanged: controller.onCompanyChanged,
                       validator: controller.companyValidator,
                       isLoading: controller.isCompaniesLoading,
+                      isEnabled: controller.isCompanySource,
                     ),
                   ),
                   SizedBox(height: AppSpacing.base),
@@ -231,7 +232,10 @@ class AddExpensesTransactionView
     required ValueChanged<String?> onChanged,
     required FormFieldValidator<String> validator,
     required bool isLoading,
+    required bool isEnabled,
   }) {
+    final shouldDisable = !isEnabled;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -243,9 +247,11 @@ class AddExpensesTransactionView
         ),
         SizedBox(height: 8.h),
         DropdownButtonFormField<String>(
-          value: selectedValue,
+          value: shouldDisable ? null : selectedValue,
           decoration: InputDecoration(
-            hintText: isLoading ? 'Loading companies...' : 'Select company',
+            hintText: shouldDisable
+                ? 'N/A for main balance expenses'
+                : (isLoading ? 'Loading companies...' : 'Select company'),
             prefixIcon: const Icon(Icons.business_outlined),
           ),
           icon: const Icon(Icons.keyboard_arrow_down_rounded),
@@ -263,7 +269,7 @@ class AddExpensesTransactionView
                 ),
               )
               .toList(),
-          onChanged: isLoading ? null : onChanged,
+          onChanged: (isLoading || shouldDisable) ? null : onChanged,
           validator: validator,
         ),
       ],

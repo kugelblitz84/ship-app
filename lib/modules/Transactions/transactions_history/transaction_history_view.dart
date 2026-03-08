@@ -21,10 +21,29 @@ class TransactionHistoryView extends GetView<TransactionHistoryController> {
       maxContentWidth: 1120,
       actions: [
         Obx(
+          () => controller.showExpensesOnly.value
+              ? IconButton(
+                  tooltip: 'Export filtered expenses PDF',
+                  icon: const Icon(
+                    Icons.picture_as_pdf_rounded,
+                    color: AppColors.errorLight,
+                    size: 25,
+                  ),
+                  onPressed: controller.visibleExpenseTransactions.isEmpty
+                      ? null
+                      : controller.exportFilteredExpensesPdf,
+                )
+              : const SizedBox.shrink(),
+        ),
+        Obx(
           () => controller.hasActiveFilters
               ? IconButton(
                   tooltip: 'Clear filters',
-                  icon: const Icon(Icons.filter_alt_off_rounded),
+                  icon: const Icon(
+                    Icons.filter_alt_off_rounded,
+                    color: AppColors.successLight,
+                    size: 25,
+                  ),
                   onPressed: controller.clearAllFilters,
                 )
               : const SizedBox.shrink(),

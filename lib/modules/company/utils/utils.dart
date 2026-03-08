@@ -674,7 +674,7 @@ class CompanyStatementUtil {
 
   static String _paymentDescription(tx_models.TransactionModel tx) {
     final method = _formatType(tx.type);
-    final company = _safe(tx.companyAndShipInfo.companyName);
+    final company = _safe(tx.companyAndShipInfo.companyName ?? 'N/A');
     final base = tx.hasTrip ? _pdfText(tx.routeLabel) : '';
     final desc = (tx.description ?? '').trim();
     final label = desc.isNotEmpty
@@ -684,7 +684,7 @@ class CompanyStatementUtil {
   }
 
   static String _dueExpenseDescription(tx_models.TransactionModel tx) {
-    final company = _safe(tx.companyAndShipInfo.companyName);
+    final company = _safe(tx.companyAndShipInfo.companyName ?? 'N/A');
     final source = _formatType(tx.expenseSource);
     final base = tx.hasTrip ? _pdfText(tx.routeLabel) : '';
     final desc = (tx.description ?? '').trim();

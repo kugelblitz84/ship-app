@@ -201,7 +201,7 @@ class UserAccessService extends GetxService {
       }
     }
 
-    return total.clamp(0, double.infinity);
+    return total;
   }
 
   double _toDouble(dynamic value) {

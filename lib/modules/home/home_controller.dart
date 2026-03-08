@@ -270,7 +270,7 @@ class HomeController extends GetxController {
         total -= amount;
       }
     }
-    return total < 0 ? 0 : total;
+    return total;
   }
 
   /// Sum amounts for a specific transaction category (and optional source).

@@ -164,9 +164,11 @@ class FirestoreTransactionService extends GetxService {
       );
     }
 
-    final companyName = transaction.companyAndShipInfo.companyName.trim();
+    final companyName =
+        transaction.companyAndShipInfo.companyName?.trim() ?? 'N/A';
     final needsCompanyUpdate =
         transactionCategory == 'payment' || expenseSource == 'company';
+    final persistedCompanyName = needsCompanyUpdate ? companyName : '';
 
     if (needsCompanyUpdate && companyName.isEmpty) {
       throw FirebaseException(
@@ -254,7 +256,7 @@ class FirestoreTransactionService extends GetxService {
         'type': paymentType,
         // Persist names only; they are the canonical identifiers now.
         'companyAndShipInfo': {
-          'companyName': transaction.companyAndShipInfo.companyName,
+          'companyName': persistedCompanyName,
           'shipName': transaction.companyAndShipInfo.shipName,
         },
         'createdAt': FieldValue.serverTimestamp(),

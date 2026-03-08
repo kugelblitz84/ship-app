@@ -81,8 +81,24 @@ class TransactionModel {
         ? readString(map['tripTo']).trim()
         : readString(map['to']).trim();
     final tripIdValue = readString(map['tripId']).trim();
+    final transactionCategoryRaw = readString(map['transactionType'])
+      .trim()
+      .toLowerCase();
+    final expenseSourceRaw = readString(map['expenseSource'])
+      .trim()
+      .toLowerCase();
+    final normalizedTransactionCategory = transactionCategoryRaw.isEmpty
+      ? 'payment'
+      : transactionCategoryRaw;
+    final normalizedExpenseSource = expenseSourceRaw.isEmpty
+      ? 'company'
+      : expenseSourceRaw;
+    final requiresCompanyName =
+      normalizedTransactionCategory == 'payment' ||
+      (normalizedTransactionCategory == 'expenses' &&
+        normalizedExpenseSource == 'company');
 
-    if (companyName.isEmpty) {
+    if (companyName.isEmpty && requiresCompanyName) {
       debugPrint(
         'TransactionModel.fromMap: empty company/ship name for transactionId=${readString(map['transactionId'])} (companyName="$companyName", shipName="$shipName")',
       );
@@ -140,13 +156,16 @@ class TransactionModel {
     );
   }
 
-  String get companyName => companyAndShipInfo.companyName;
+  String get companyName => companyAndShipInfo.companyName ?? '';
 
   String get normalizedTransactionType => transactionType.trim().toLowerCase();
 
   String get normalizedExpenseSource => expenseSource.trim().toLowerCase();
 
   bool get isExpense => normalizedTransactionType == 'expenses';
+
+  bool get isMainBalanceExpense =>
+      isExpense && normalizedExpenseSource == 'main-balance';
 
   String get transactionTypeLabel {
     if (normalizedTransactionType == 'expenses') {
@@ -212,8 +231,8 @@ class TransactionModel {
 class CompanyAndShipInfo {
   // Names are persisted as the source of identity.
   //company is mandatory but ship is optional.
-  String companyName;
-  String shipName;
+  String? companyName;
+  String? shipName;
 
-  CompanyAndShipInfo({required this.companyName, required this.shipName});
+  CompanyAndShipInfo({this.companyName, this.shipName});
 }

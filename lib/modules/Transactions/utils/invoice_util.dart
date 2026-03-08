@@ -335,7 +335,7 @@ class InvoiceUtil {
           child: _infoCard(
             title: 'Billed To',
             rows: [
-              _safe(transaction.companyAndShipInfo.companyName),
+              _companyDisplayName(transaction),
               'Ship: ${_safe(transaction.companyAndShipInfo.shipName ?? 'null')}',
             ],
           ),
@@ -618,6 +618,13 @@ class InvoiceUtil {
     return trimmed.isEmpty ? 'N/A' : trimmed;
   }
 
+  static String _companyDisplayName(TransactionModel transaction) {
+    if (transaction.isMainBalanceExpense) {
+      return 'N/A';
+    }
+    return _safe(transaction.companyAndShipInfo.companyName ?? 'N/A');
+  }
+
   static double _parseAmount(String amount) {
     final cleaned = amount.replaceAll(',', '').trim();
     return double.tryParse(cleaned) ?? 0;
@@ -757,6 +764,13 @@ class InvoicePreviewPage extends StatelessWidget {
         .join(' ');
   }
 
+  String _companyDisplayName(TransactionModel transaction) {
+    if (transaction.isMainBalanceExpense) {
+      return 'N/A';
+    }
+    return _safe(transaction.companyAndShipInfo.companyName ?? 'N/A');
+  }
+
   String _currency(double amount) {
     final formatter = NumberFormat.currency(
       locale: 'en_US',
@@ -862,7 +876,7 @@ class InvoicePreviewPage extends StatelessWidget {
                     context,
                     title: 'Billed To',
                     rows: [
-                      _safe(transaction.companyAndShipInfo.companyName),
+                      _companyDisplayName(transaction),
                       'Ship: ${_safe(transaction.companyAndShipInfo.shipName ?? 'null')}',
                     ],
                   ),
