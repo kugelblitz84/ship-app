@@ -9,15 +9,16 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../../core/services/download/download_service.dart';
-import '../../Transactions/models/transaction_model.dart' as tx_models;
-import '../../trip/models/trip_model.dart' as trip_models;
 import '../models/company_model.dart';
+import '../../trip/models/trip_model.dart' as trip_models;
+import '../../Transactions/models/transaction_model.dart' as tx_models;
 
 class CompanyStatementUtil {
   CompanyStatementUtil._();
 
   static final DownloadService _downloadService = createDownloadService();
 
+  /// Simple method you can call directly from your controller.
   static Future<void> generateAndSavePdf({
     required CompanyModel company,
     required List<trip_models.TripModel> trips,
@@ -148,28 +149,39 @@ class CompanyStatementUtil {
     required List<trip_models.TripModel> trips,
     required List<tx_models.TransactionModel> transactions,
   }) async {
-    final ledger = _buildLedger(trips, transactions);
-    final generatedAt = DateTime.now();
-    final theme = await _buildPdfTheme();
+    final pdfTheme = await _buildPdfTheme();
 
     final pdf = pw.Document(
       title: 'Company Statement',
       author: 'Urgent',
       creator: 'Urgent App',
-      subject: 'Company statement ledger (debit/credit/balance)',
+      subject: 'Company statement (ledger)',
     );
 
-    final dateRange = ledger.entries.isEmpty
+    final generatedAt = DateTime.now();
+    final ledger = _buildLedger(trips, transactions);
+
+    final storedBilled = _parseAmount(company.totalAmountBilled);
+    final storedReceived = _parseAmount(company.totalAmountReceived);
+    final storedDue = _parseAmount(company.totalAmountDue);
+
+    // Computed truth from history
+    final billed = ledger.totalTripBill;
+    final paid = ledger.totalPayments;
+    final expenses = ledger.totalExpenses;
+    final closingDue = ledger.closingDue;
+
+    final dateRange = ledger.blocks.isEmpty
         ? const _DateRange('--', '--')
         : _DateRange(
-            ledger.entries.first.displayDate,
-            ledger.entries.last.displayDate,
+            ledger.blocks.first.displayDate,
+            ledger.blocks.last.displayDate,
           );
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        theme: theme,
+        theme: pdfTheme,
         margin: const pw.EdgeInsets.all(24),
         footer: (context) => pw.Container(
           alignment: pw.Alignment.centerRight,
@@ -185,30 +197,52 @@ class CompanyStatementUtil {
             companyName: _safe(company.name),
           ),
           pw.SizedBox(height: 14),
+
           _buildCompanyInfoSection(
             company: company,
             fromDate: dateRange.from,
             toDate: dateRange.to,
-            totalEntries: ledger.entries.length,
+            tripCount: trips.length,
+            paymentCount: transactions.where((e) => !_isExpense(e)).length,
+            expenseCount: transactions
+                .where((e) => _isCompanyExpense(e))
+                .length,
           ),
           pw.SizedBox(height: 14),
-          _buildSummaryRow(
-            totalDebit: _currency(ledger.totalDebit),
-            totalCredit: _currency(ledger.totalCredit),
-            closingBalance: _currency(ledger.closingBalance),
+
+          _buildMinimalSummaryRow(
+            billed: _currency(billed),
+            paid: _currency(paid),
+            expenses: _currency(expenses),
+            due: _currency(closingDue),
           ),
+
           pw.SizedBox(height: 14),
-          _buildLedgerTitle(),
+
+          _buildHistoryTitle(),
           pw.SizedBox(height: 8),
-          _buildLedgerTable(ledger),
+          _buildLedgerHistoryTable(ledger),
+
           pw.SizedBox(height: 12),
+
           _buildClosingBox(
-            totalDebit: _currency(ledger.totalDebit),
-            totalCredit: _currency(ledger.totalCredit),
-            closingBalance: _currency(ledger.closingBalance),
+            billed: _currency(billed),
+            paid: _currency(paid),
+            expenses: _currency(expenses),
+            closingDue: _currency(closingDue),
           ),
+
           pw.SizedBox(height: 12),
-          _buildNotesSection(company, ledger),
+
+          _buildNotesSection(
+            company: company,
+            storedBilled: storedBilled,
+            storedReceived: storedReceived,
+            storedDue: storedDue,
+            computedBilled: billed,
+            computedReceived: paid,
+            computedDue: closingDue,
+          ),
         ],
       ),
     );
@@ -226,6 +260,10 @@ class CompanyStatementUtil {
     final resolvedName = safeCompanyName.isEmpty ? 'company' : safeCompanyName;
     return 'company_statement_${resolvedName}_$stamp.pdf';
   }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // PDF SECTIONS
+  // ────────────────────────────────────────────────────────────────────────────
 
   static pw.Widget _buildHeader({
     required DateTime generatedAt,
@@ -260,7 +298,7 @@ class CompanyStatementUtil {
               ),
               pw.SizedBox(height: 3),
               pw.Text(
-                'Debit / Credit / Balance Ledger',
+                'Urgent Transport Billing',
                 style: const pw.TextStyle(
                   color: PdfColors.white,
                   fontSize: 9.5,
@@ -288,7 +326,9 @@ class CompanyStatementUtil {
     required CompanyModel company,
     required String fromDate,
     required String toDate,
-    required int totalEntries,
+    required int tripCount,
+    required int paymentCount,
+    required int expenseCount,
   }) {
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -310,9 +350,9 @@ class CompanyStatementUtil {
           child: _infoCard(
             title: 'Overview',
             rows: [
-              'Entries: $totalEntries',
-              'Formula: previous + debit - credit',
-              'Credit is bill + due-expense, debit is payment',
+              'Trips: $tripCount',
+              'Payments: $paymentCount',
+              'Expenses: $expenseCount',
             ],
           ),
         ),
@@ -320,10 +360,11 @@ class CompanyStatementUtil {
     );
   }
 
-  static pw.Widget _buildSummaryRow({
-    required String totalDebit,
-    required String totalCredit,
-    required String closingBalance,
+  static pw.Widget _buildMinimalSummaryRow({
+    required String billed,
+    required String paid,
+    required String expenses,
+    required String due,
   }) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(12),
@@ -333,15 +374,13 @@ class CompanyStatementUtil {
       ),
       child: pw.Row(
         children: [
-          pw.Expanded(child: _miniStat('Total Debit (Payment)', totalDebit)),
+          pw.Expanded(child: _miniStat('Billed', billed)),
           pw.SizedBox(width: 10),
-          pw.Expanded(
-            child: _miniStat('Total Credit (Bill + Due Expense)', totalCredit),
-          ),
+          pw.Expanded(child: _miniStat('Paid', paid)),
           pw.SizedBox(width: 10),
-          pw.Expanded(
-            child: _miniStat('Closing Balance', closingBalance, bold: true),
-          ),
+          pw.Expanded(child: _miniStat('Expenses', expenses)),
+          pw.SizedBox(width: 10),
+          pw.Expanded(child: _miniStat('Closing Due', due, bold: true)),
         ],
       ),
     );
@@ -368,7 +407,7 @@ class CompanyStatementUtil {
     );
   }
 
-  static pw.Widget _buildLedgerTitle() {
+  static pw.Widget _buildHistoryTitle() {
     return pw.Row(
       children: [
         pw.Container(
@@ -380,7 +419,7 @@ class CompanyStatementUtil {
           ),
           alignment: pw.Alignment.center,
           child: pw.Text(
-            'L',
+            'H',
             style: pw.TextStyle(
               fontWeight: pw.FontWeight.bold,
               color: PdfColors.blueGrey900,
@@ -393,7 +432,7 @@ class CompanyStatementUtil {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
-              'Statement Ledger',
+              'Statement History',
               style: pw.TextStyle(
                 fontWeight: pw.FontWeight.bold,
                 fontSize: 12,
@@ -402,7 +441,7 @@ class CompanyStatementUtil {
             ),
             pw.SizedBox(height: 2),
             pw.Text(
-              'Running balance using debit and credit only.',
+              'Date-wise ledger with subtotals and running due balance.',
               style: const pw.TextStyle(
                 fontSize: 9.5,
                 color: PdfColors.grey700,
@@ -414,64 +453,120 @@ class CompanyStatementUtil {
     );
   }
 
-  static pw.Widget _buildLedgerTable(_LedgerBuildResult ledger) {
+  static pw.Widget _buildLedgerHistoryTable(_LedgerBuildResult ledger) {
+    // Columns: SL | Date | Particulars | Bill | Payment | Expense | Balance
     final rows = <pw.TableRow>[];
 
+    // Header
     rows.add(
       pw.TableRow(
         decoration: const pw.BoxDecoration(color: PdfColors.blueGrey50),
         children: [
-          _cell('ID', header: true),
+          _cell('SL', header: true),
           _cell('Date', header: true),
-          _cell('Description', header: true),
-          _cell('Debit (+)', header: true, right: true),
-          _cell('Credit (-)', header: true, right: true),
-          _cell('Balance', header: true, right: true),
+          _cell('Particulars', header: true),
+          _cell('Before', header: true, right: true),
+          _cell('Bill (+)', header: true, right: true),
+          _cell('Pay (-)', header: true, right: true),
+          _cell('Exp (+)', header: true, right: true),
+          _cell('Balance (Due)', header: true, right: true),
         ],
       ),
     );
 
-    if (ledger.entries.isEmpty) {
+    // Opening
+
+    int sl = 0;
+
+    for (final block in ledger.blocks) {
+      rows.add(
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+          children: [
+            _cell(''),
+            _cell(block.displayDate, bold: true),
+            _cell(''),
+            _cell('', right: true),
+            _cell('', right: true),
+            _cell('', right: true),
+            _cell('', right: true),
+            _cell('', right: true),
+          ],
+        ),
+      );
+
+      for (final entry in block.entries) {
+        sl += 1;
+
+        rows.add(
+          pw.TableRow(
+            children: [
+              _cell(sl.toString()),
+              _cell(''),
+              _cell(entry.particulars),
+              _cell(_currency(entry.balanceBefore), right: true),
+              _cell(entry.bill > 0 ? _currency(entry.bill) : '', right: true),
+              _cell(
+                entry.payment > 0 ? _currency(entry.payment) : '',
+                right: true,
+              ),
+              _cell(
+                entry.expense > 0 ? _currency(entry.expense) : '',
+                right: true,
+              ),
+              _cell(_currency(entry.balanceAfter), right: true),
+            ],
+          ),
+        );
+      }
+
+      // Subtotal row
+      rows.add(
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.blueGrey50),
+          children: [
+            _cell(''),
+            _cell(''),
+            _cell('Subtotal', bold: true),
+            _cell('', right: true),
+            _cell(_currency(block.billSubtotal), right: true, bold: true),
+            _cell(_currency(block.paymentSubtotal), right: true, bold: true),
+            _cell(_currency(block.expenseSubtotal), right: true, bold: true),
+            _cell(_currency(block.balanceAfter), right: true, bold: true),
+          ],
+        ),
+      );
+
       rows.add(
         pw.TableRow(
           children: [
             _cell(''),
             _cell(''),
-            _cell('No ledger entries found.'),
+            _cell(''),
             _cell('', right: true),
             _cell('', right: true),
-            _cell(_currency(ledger.closingBalance), right: true),
+            _cell('', right: true),
+            _cell('', right: true),
+            _cell('', right: true),
           ],
         ),
       );
     }
 
-    for (final entry in ledger.entries) {
-      rows.add(
-        pw.TableRow(
-          children: [
-            _cell(entry.id.toString()),
-            _cell(entry.displayDate),
-            _cell(entry.description),
-            _cell(entry.debit > 0 ? _currency(entry.debit) : '', right: true),
-            _cell(entry.credit > 0 ? _currency(entry.credit) : '', right: true),
-            _cell(_currency(entry.balance), right: true),
-          ],
-        ),
-      );
-    }
-
+    // Closing row
     rows.add(
       pw.TableRow(
         decoration: const pw.BoxDecoration(color: PdfColors.blueGrey900),
         children: [
           _cell('', color: PdfColors.white),
           _cell('', color: PdfColors.white),
-          _cell('Closing Balance', color: PdfColors.white, bold: true),
+          _cell('Closing Due', color: PdfColors.white, bold: true),
+          _cell('', right: true, color: PdfColors.white),
+          _cell('', right: true, color: PdfColors.white),
           _cell('', right: true, color: PdfColors.white),
           _cell('', right: true, color: PdfColors.white),
           _cell(
-            _currency(ledger.closingBalance),
+            _currency(ledger.closingDue),
             right: true,
             color: PdfColors.white,
             bold: true,
@@ -483,26 +578,29 @@ class CompanyStatementUtil {
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
       columnWidths: {
-        0: const pw.FlexColumnWidth(0.75),
-        1: const pw.FlexColumnWidth(1.4),
-        2: const pw.FlexColumnWidth(4.2),
-        3: const pw.FlexColumnWidth(1.55),
-        4: const pw.FlexColumnWidth(1.55),
-        5: const pw.FlexColumnWidth(1.6),
+        0: const pw.FlexColumnWidth(0.65),
+        1: const pw.FlexColumnWidth(1.2),
+        2: const pw.FlexColumnWidth(3.7),
+        3: const pw.FlexColumnWidth(1.4),
+        4: const pw.FlexColumnWidth(1.25),
+        5: const pw.FlexColumnWidth(1.25),
+        6: const pw.FlexColumnWidth(1.25),
+        7: const pw.FlexColumnWidth(1.45),
       },
       children: rows,
     );
   }
 
   static pw.Widget _buildClosingBox({
-    required String totalDebit,
-    required String totalCredit,
-    required String closingBalance,
+    required String billed,
+    required String paid,
+    required String expenses,
+    required String closingDue,
   }) {
     return pw.Align(
       alignment: pw.Alignment.centerRight,
       child: pw.Container(
-        width: 320,
+        width: 280,
         padding: const pw.EdgeInsets.all(12),
         decoration: pw.BoxDecoration(
           border: pw.Border.all(color: PdfColors.grey300, width: 0.8),
@@ -510,28 +608,38 @@ class CompanyStatementUtil {
         ),
         child: pw.Column(
           children: [
-            _amountLine('Total Debit', totalDebit),
+            _amountLine('Total Billed', billed),
             pw.SizedBox(height: 6),
-            _amountLine('Total Credit', totalCredit),
+            _amountLine('Total Paid', paid),
+            pw.SizedBox(height: 6),
+            _amountLine('Total Expenses', expenses),
             pw.Divider(color: PdfColors.grey400, height: 14),
-            _amountLine('Closing Balance', closingBalance, bold: true),
+            _amountLine('Closing Due', closingDue, bold: true),
           ],
         ),
       ),
     );
   }
 
-  static pw.Widget _buildNotesSection(
-    CompanyModel company,
-    _LedgerBuildResult ledger,
-  ) {
+  static pw.Widget _buildNotesSection({
+    required CompanyModel company,
+    required double storedBilled,
+    required double storedReceived,
+    required double storedDue,
+    required double computedBilled,
+    required double computedReceived,
+    required double computedDue,
+  }) {
     final description = (company.description ?? '').trim();
 
-    final interpretation = ledger.closingBalance < 0
-        ? 'Negative balance means receivable remains against the company.'
-        : ledger.closingBalance > 0
-        ? 'Positive balance means extra payment is available.'
-        : 'Zero balance means the account is settled.';
+    final mismatch =
+        (storedDue - computedDue).abs() > 0.5 ||
+        (storedBilled - computedBilled).abs() > 0.5 ||
+        (storedReceived - computedReceived).abs() > 0.5;
+
+    final reconcileLine = mismatch
+        ? 'Note: Stored totals may differ from computed history (snapshot vs ledger).'
+        : 'Totals are consistent with computed ledger history.';
 
     return pw.Container(
       width: double.infinity,
@@ -550,13 +658,13 @@ class CompanyStatementUtil {
           pw.SizedBox(height: 6),
           pw.Text(
             description.isEmpty
-                ? 'This statement is generated from trip bills + company due-expenses (credit) and payments (debit).'
+                ? 'This statement is generated from trips and transactions recorded in the Urgent app.'
                 : description,
             style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
           ),
           pw.SizedBox(height: 8),
           pw.Text(
-            interpretation,
+            reconcileLine,
             style: const pw.TextStyle(fontSize: 9.5, color: PdfColors.grey700),
           ),
         ],
@@ -564,135 +672,196 @@ class CompanyStatementUtil {
     );
   }
 
+  // ────────────────────────────────────────────────────────────────────────────
+  // LEDGER BUILD (date blocks + running balance)
+  // ────────────────────────────────────────────────────────────────────────────
+
   static _LedgerBuildResult _buildLedger(
     List<trip_models.TripModel> trips,
     List<tx_models.TransactionModel> transactions,
   ) {
-    final items = <_LedgerRawItem>[];
+    final buckets = <String, _LedgerBucket>{};
 
-    for (final trip in trips) {
-      items.add(
-        _LedgerRawItem(
-          dateRaw: trip.date,
-          description: _tripDescription(trip),
-          debit: 0,
-          credit: _parseAmount(trip.totalBill),
-          kindOrder: 0,
+    _LedgerBucket ensure(String rawDate) {
+      final trimmed = rawDate.trim();
+      final parsed = _tryParseDate(trimmed);
+      final key = parsed != null
+          ? DateFormat('yyyy-MM-dd').format(parsed)
+          : (trimmed.isEmpty ? 'unknown-date' : 'raw-$trimmed');
+
+      return buckets.putIfAbsent(
+        key,
+        () => _LedgerBucket(
+          key: key,
+          rawDate: trimmed,
+          parsedDate: parsed,
+          displayDate: parsed != null
+              ? DateFormat('dd MMM yyyy').format(parsed)
+              : (trimmed.isEmpty ? 'Unknown Date' : trimmed),
         ),
       );
     }
 
-    for (final tx in transactions) {
-      if (_isMainBalanceExpense(tx)) {
-        continue;
-      }
+    // Trips (bill +)
+    for (final trip in trips) {
+      ensure(trip.date).trips.add(trip);
+    }
 
-      if (_isCompanyAddedToDueExpense(tx)) {
-        items.add(
-          _LedgerRawItem(
-            dateRaw: tx.date,
-            description: _dueExpenseDescription(tx),
-            debit: 0,
-            credit: _parseAmount(tx.amount),
-            kindOrder: 0,
+    // Transactions (payment - / company-expense +)
+    // Main-balance expenses affect cash-at-hand only and are excluded from due.
+    for (final tx in transactions) {
+      if (_isCompanyExpense(tx)) {
+        ensure(tx.date).expenses.add(tx);
+      } else if (!_isExpense(tx)) {
+        ensure(tx.date).payments.add(tx);
+      }
+    }
+
+    // Sort buckets ascending for "build-up" narrative
+    final blocks = buckets.values.toList()
+      ..sort((a, b) {
+        final ad = a.parsedDate;
+        final bd = b.parsedDate;
+        if (ad != null && bd != null) return ad.compareTo(bd);
+        if (ad != null) return -1;
+        if (bd != null) return 1;
+        return a.displayDate.compareTo(b.displayDate);
+      });
+
+    double runningDue = 0;
+
+    double totalTripBill = 0;
+    double totalPayments = 0;
+    double totalExpenses = 0;
+
+    final builtBlocks = <_LedgerDateBlock>[];
+
+    for (final b in blocks) {
+      final entries = <_LedgerEntry>[];
+
+      double billSubtotal = 0;
+      double paymentSubtotal = 0;
+      double expenseSubtotal = 0;
+
+      // Trips first (bill +)
+      for (final trip in b.trips) {
+        final bill = _parseAmount(trip.totalBill);
+        totalTripBill += bill;
+        billSubtotal += bill;
+
+        final balanceBefore = runningDue;
+        runningDue += bill;
+
+        entries.add(
+          _LedgerEntry(
+            particulars: _tripParticular(trip),
+            bill: bill,
+            payment: 0,
+            expense: 0,
+            balanceBefore: balanceBefore,
+            balanceAfter: runningDue,
           ),
         );
-        continue;
       }
 
-      items.add(
-        _LedgerRawItem(
-          dateRaw: tx.date,
-          description: _paymentDescription(tx),
-          debit: _parseAmount(tx.amount),
-          credit: 0,
-          kindOrder: 1,
-        ),
-      );
-    }
+      // Expenses ( + )
+      for (final tx in b.expenses) {
+        final amount = _parseAmount(tx.amount);
+        totalExpenses += amount;
+        expenseSubtotal += amount;
 
-    items.sort((a, b) {
-      final ad = a.parsedDate;
-      final bd = b.parsedDate;
+        final balanceBefore = runningDue;
+        runningDue += amount;
 
-      if (ad != null && bd != null) {
-        final dateCmp = ad.compareTo(bd);
-        if (dateCmp != 0) return dateCmp;
-      } else if (ad != null) {
-        return -1;
-      } else if (bd != null) {
-        return 1;
+        entries.add(
+          _LedgerEntry(
+            particulars: _expenseParticular(tx),
+            bill: 0,
+            payment: 0,
+            expense: amount,
+            balanceBefore: balanceBefore,
+            balanceAfter: runningDue,
+          ),
+        );
       }
 
-      final kindCmp = a.kindOrder.compareTo(b.kindOrder);
-      if (kindCmp != 0) return kindCmp;
-      return a.description.compareTo(b.description);
-    });
+      // Payments ( - )
+      for (final tx in b.payments) {
+        final amount = _parseAmount(tx.amount);
+        totalPayments += amount;
+        paymentSubtotal += amount;
 
-    final entries = <_LedgerEntry>[];
-    var runningBalance = 0.0;
-    var totalDebit = 0.0;
-    var totalCredit = 0.0;
+        final balanceBefore = runningDue;
+        runningDue -= amount;
 
-    var id = 0;
-    for (final item in items) {
-      id += 1;
-      totalDebit += item.debit;
-      totalCredit += item.credit;
-      runningBalance = runningBalance + item.debit - item.credit;
+        entries.add(
+          _LedgerEntry(
+            particulars: _paymentParticular(tx),
+            bill: 0,
+            payment: amount,
+            expense: 0,
+            balanceBefore: balanceBefore,
+            balanceAfter: runningDue,
+          ),
+        );
+      }
 
-      entries.add(
-        _LedgerEntry(
-          id: id,
-          displayDate: item.displayDate,
-          description: item.description,
-          debit: item.debit,
-          credit: item.credit,
-          balance: runningBalance,
+      builtBlocks.add(
+        _LedgerDateBlock(
+          displayDate: b.displayDate,
+          parsedDate: b.parsedDate,
+          entries: entries,
+          billSubtotal: billSubtotal,
+          paymentSubtotal: paymentSubtotal,
+          expenseSubtotal: expenseSubtotal,
+          balanceAfter: runningDue,
         ),
       );
     }
 
     return _LedgerBuildResult(
-      entries: entries,
-      totalDebit: totalDebit,
-      totalCredit: totalCredit,
-      closingBalance: runningBalance,
+      openingDue: 0,
+      blocks: builtBlocks,
+      totalTripBill: totalTripBill,
+      totalPayments: totalPayments,
+      totalExpenses: totalExpenses,
+      closingDue: runningDue,
     );
   }
 
-  static String _tripDescription(trip_models.TripModel trip) {
+  static String _tripParticular(trip_models.TripModel trip) {
     final from = _safe(trip.from);
     final to = _safe(trip.to);
-    final company = _safe(trip.companyAndShipInfo.companyName);
     final product = (trip.product?.productName ?? '').trim();
-    final productPart = product.isEmpty
+    final productLabel = product.isEmpty
         ? ''
-        : ' | Product: ${_pdfText(product)}';
-    return _pdfText('Trip bill: $from - $to | Company: $company$productPart');
+        : ' • Product: ${_pdfText(product)}';
+    return _pdfText('Trip bill: $from - $to$productLabel');
   }
 
-  static String _paymentDescription(tx_models.TransactionModel tx) {
+  static String _paymentParticular(tx_models.TransactionModel tx) {
     final method = _formatType(tx.type);
-    final company = _safe(tx.companyAndShipInfo.companyName);
     final base = tx.hasTrip ? _pdfText(tx.routeLabel) : '';
     final desc = (tx.description ?? '').trim();
     final label = desc.isNotEmpty
         ? _pdfText(desc)
         : (base.isNotEmpty ? base : 'Payment entry');
-    return _pdfText('Payment ($method): $label | Company: $company');
+    return _pdfText('Payment received ($method): $label');
   }
 
-  static String _dueExpenseDescription(tx_models.TransactionModel tx) {
-    final company = _safe(tx.companyAndShipInfo.companyName);
+  static String _expenseParticular(tx_models.TransactionModel tx) {
     final source = _formatType(tx.expenseSource);
     final base = tx.hasTrip ? _pdfText(tx.routeLabel) : '';
     final desc = (tx.description ?? '').trim();
     final label = desc.isNotEmpty
         ? _pdfText(desc)
         : (base.isNotEmpty ? base : 'Expense entry');
-    return _pdfText('Due Expense ($source): $label | Company: $company');
+    return _pdfText('Expense ($source): $label');
   }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // HELPERS
+  // ────────────────────────────────────────────────────────────────────────────
 
   static pw.Widget _metaText(String label, String value) {
     return pw.RichText(
@@ -822,20 +991,11 @@ class CompanyStatementUtil {
     return tx.transactionType.trim().toLowerCase() == 'expenses';
   }
 
-  static bool _isMainBalanceExpense(tx_models.TransactionModel tx) {
+  static bool _isCompanyExpense(tx_models.TransactionModel tx) {
     if (!_isExpense(tx)) return false;
 
-    final normalizedSource = tx.expenseSource
-        .trim()
-        .toLowerCase()
-        .replaceAll('_', '-')
-        .replaceAll(' ', '-');
-
-    return normalizedSource == 'main-balance';
-  }
-
-  static bool _isCompanyAddedToDueExpense(tx_models.TransactionModel tx) {
-    return _isExpense(tx) && !_isMainBalanceExpense(tx);
+    final source = tx.expenseSource.trim().toLowerCase().replaceAll('_', '-');
+    return source != 'main-balance' && source != 'main balance';
   }
 
   static DateTime? _tryParseDate(String raw) {
@@ -985,24 +1145,27 @@ class CompanyStatementUtil {
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
+                        color: Colors.indigo.shade50,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Icon(
-                        Icons.download,
-                        color: Colors.orange.shade700,
+                        Icons.download_rounded,
+                        color: Colors.indigo.shade600,
                       ),
                     ),
                     title: const Text('Download Statement'),
                     subtitle: const Text('Save a copy from the browser'),
                     onTap: () async {
-                      final ok = await _downloadService.triggerDownload(
+                      final downloaded = await _downloadService.triggerDownload(
                         savedFile,
                       );
-                      if (!ok && context.mounted) {
+                      if (sheetContext.mounted) {
+                        Navigator.of(sheetContext).pop();
+                      }
+                      if (!downloaded && context.mounted) {
                         _showErrorDialog(
                           context,
-                          'Unable to trigger download for this statement.',
+                          'Unable to trigger browser download.',
                         );
                       }
                     },
@@ -1042,6 +1205,10 @@ class CompanyStatementUtil {
   }
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// PREVIEW PAGE (simple + consistent with ledger)
+// ──────────────────────────────────────────────────────────────────────────────
+
 class CompanyStatementPreviewPage extends StatelessWidget {
   const CompanyStatementPreviewPage({
     super.key,
@@ -1057,6 +1224,11 @@ class CompanyStatementPreviewPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ledger = CompanyStatementUtil._buildLedger(trips, transactions);
+
+    final billed = ledger.totalTripBill;
+    final paid = ledger.totalPayments;
+    final expenses = ledger.totalExpenses;
+    final due = ledger.closingDue;
 
     return Scaffold(
       appBar: AppBar(
@@ -1078,24 +1250,29 @@ class CompanyStatementPreviewPage extends StatelessWidget {
         children: [
           _previewHeader(company),
           const SizedBox(height: 12),
-          _previewSummary(ledger),
+          _previewSummary(
+            billed: billed,
+            paid: paid,
+            expenses: expenses,
+            due: due,
+          ),
           const SizedBox(height: 14),
           const Text(
-            'Ledger',
+            'History',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          if (ledger.entries.isEmpty)
+          if (ledger.blocks.isEmpty)
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Text('No ledger entries found for this company.'),
+              child: const Text('No history found for this company.'),
             )
           else
-            ...ledger.entries.map(_previewEntryCard),
+            ...ledger.blocks.map((b) => _previewDateBlock(b)),
           const SizedBox(height: 24),
         ],
       ),
@@ -1137,7 +1314,12 @@ class CompanyStatementPreviewPage extends StatelessWidget {
     );
   }
 
-  Widget _previewSummary(_LedgerBuildResult ledger) {
+  Widget _previewSummary({
+    required double billed,
+    required double paid,
+    required double expenses,
+    required double due,
+  }) {
     Widget box(String label, String value) {
       return Expanded(
         child: Container(
@@ -1169,84 +1351,139 @@ class CompanyStatementPreviewPage extends StatelessWidget {
 
     return Row(
       children: [
-        box('Debit', CompanyStatementUtil._currency(ledger.totalDebit)),
+        box('Billed', CompanyStatementUtil._currency(billed)),
         const SizedBox(width: 8),
-        box('Credit', CompanyStatementUtil._currency(ledger.totalCredit)),
+        box('Paid', CompanyStatementUtil._currency(paid)),
         const SizedBox(width: 8),
-        box('Balance', CompanyStatementUtil._currency(ledger.closingBalance)),
+        box('Due', CompanyStatementUtil._currency(due)),
       ],
     );
   }
 
-  Widget _previewEntryCard(_LedgerEntry entry) {
+  Widget _previewDateBlock(_LedgerDateBlock block) {
+    final openingBalance = block.entries.isEmpty
+        ? block.balanceAfter
+        : block.entries.first.balanceBefore;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${entry.id}. ${entry.displayDate}',
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+            block.displayDate,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 6),
-          Text(
-            entry.description,
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
-          ),
-          const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(
-                child: _miniValue(
-                  'Debit',
-                  entry.debit > 0
-                      ? CompanyStatementUtil._currency(entry.debit)
-                      : '-',
+              Text(
+                'Before Date: ${CompanyStatementUtil._currency(openingBalance)}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey.shade700,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              Expanded(
-                child: _miniValue(
-                  'Credit',
-                  entry.credit > 0
-                      ? CompanyStatementUtil._currency(entry.credit)
-                      : '-',
-                ),
-              ),
-              Expanded(
-                child: _miniValue(
-                  'Balance',
-                  CompanyStatementUtil._currency(entry.balance),
+              const SizedBox(width: 12),
+              Text(
+                'After Date: ${CompanyStatementUtil._currency(block.balanceAfter)}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey.shade700,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          ...block.entries.map(
+            (e) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      e.particulars,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    CompanyStatementUtil._currency(
+                      e.bill + e.expense - e.payment,
+                    ),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: (e.payment > 0)
+                          ? Colors.green.shade700
+                          : Colors.blueGrey.shade900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Divider(height: 18),
+          _smallRow(
+            'Subtotal Bill',
+            CompanyStatementUtil._currency(block.billSubtotal),
+          ),
+          _smallRow(
+            'Subtotal Paid',
+            CompanyStatementUtil._currency(block.paymentSubtotal),
+          ),
+          _smallRow(
+            'Subtotal Expenses',
+            CompanyStatementUtil._currency(block.expenseSubtotal),
+          ),
+          const SizedBox(height: 6),
+          _smallRow(
+            'Balance After Date',
+            CompanyStatementUtil._currency(block.balanceAfter),
+            bold: true,
           ),
         ],
       ),
     );
   }
 
-  Widget _miniValue(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-        ),
-      ],
+  Widget _smallRow(String label, String value, {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: bold ? FontWeight.bold : FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// INTERNAL MODELS
+// ──────────────────────────────────────────────────────────────────────────────
 
 class _DateRange {
   const _DateRange(this.from, this.to);
@@ -1254,63 +1491,81 @@ class _DateRange {
   final String to;
 }
 
-class _LedgerRawItem {
-  _LedgerRawItem({
-    required this.dateRaw,
-    required this.description,
-    required this.debit,
-    required this.credit,
-    required this.kindOrder,
-  }) : parsedDate = CompanyStatementUtil._tryParseDate(dateRaw),
-       displayDate = _resolveDisplayDate(dateRaw);
+class _LedgerBuildResult {
+  _LedgerBuildResult({
+    required this.openingDue,
+    required this.blocks,
+    required this.totalTripBill,
+    required this.totalPayments,
+    required this.totalExpenses,
+    required this.closingDue,
+  });
 
-  final String dateRaw;
-  final String description;
-  final double debit;
-  final double credit;
-  final int kindOrder;
+  final double openingDue;
+  final List<_LedgerDateBlock> blocks;
+
+  final double totalTripBill;
+  final double totalPayments;
+  final double totalExpenses;
+  final double closingDue;
+}
+
+class _LedgerBucket {
+  _LedgerBucket({
+    required this.key,
+    required this.rawDate,
+    required this.parsedDate,
+    required this.displayDate,
+  });
+
+  final String key;
+  final String rawDate;
   final DateTime? parsedDate;
   final String displayDate;
 
-  static String _resolveDisplayDate(String rawDate) {
-    final parsed = CompanyStatementUtil._tryParseDate(rawDate);
-    if (parsed != null) {
-      return DateFormat('dd MMM yyyy').format(parsed);
-    }
-
-    final trimmed = rawDate.trim();
-    return trimmed.isEmpty ? 'Unknown Date' : trimmed;
-  }
+  final List<trip_models.TripModel> trips = [];
+  final List<tx_models.TransactionModel> payments = [];
+  final List<tx_models.TransactionModel> expenses = [];
 }
 
-class _LedgerBuildResult {
-  _LedgerBuildResult({
+class _LedgerDateBlock {
+  _LedgerDateBlock({
+    required this.displayDate,
+    required this.parsedDate,
     required this.entries,
-    required this.totalDebit,
-    required this.totalCredit,
-    required this.closingBalance,
+    required this.billSubtotal,
+    required this.paymentSubtotal,
+    required this.expenseSubtotal,
+    // required this.balanceBefore,
+    required this.balanceAfter,
   });
 
+  final String displayDate;
+  final DateTime? parsedDate;
+
   final List<_LedgerEntry> entries;
-  final double totalDebit;
-  final double totalCredit;
-  final double closingBalance;
+
+  final double billSubtotal;
+  final double paymentSubtotal;
+  final double expenseSubtotal;
+  // final double balanceBefore;
+  final double balanceAfter;
 }
 
 class _LedgerEntry {
   _LedgerEntry({
-    required this.id,
-    required this.displayDate,
-    required this.description,
-    required this.debit,
-    required this.credit,
-    required this.balance,
+    required this.particulars,
+    required this.bill,
+    required this.payment,
+    required this.expense,
+    required this.balanceBefore,
+    required this.balanceAfter,
   });
 
-  final int id;
-  final String displayDate;
-  final String description;
-  final double debit;
-  final double credit;
-  final double balance;
+  final String particulars;
+  final double bill;
+  final double payment;
+  final double expense;
+  final double balanceBefore;
+  final double balanceAfter;
 }

@@ -30,6 +30,7 @@ class TransactionHistoryView extends GetView<TransactionHistoryController> {
               : const SizedBox.shrink(),
         ),
       ],
+      onRefresh: controller.onRefresh,
       child: Obx(() {
         final transactions = controller.transactions;
         final visibleTransactions = controller.visibleTransactions;
@@ -67,7 +68,6 @@ class TransactionHistoryView extends GetView<TransactionHistoryController> {
           ],
         );
       }),
-      onRefresh: controller.onRefresh,
     );
   }
 }
@@ -82,9 +82,14 @@ class _TransactionSearchSortFilterBar extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF6F8FF), Color(0xFFFFF8F1)],
+        ),
         borderRadius: AppRadius.lg,
         border: Border.all(color: AppColors.neutral200),
+        boxShadow: AppShadows.sm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,6 +175,105 @@ class _TransactionSearchSortFilterBar extends StatelessWidget {
             onChanged: controller.onSortChanged,
           ),
           SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: 8.w,
+            runSpacing: 8.h,
+            children: [
+              FilterChip(
+                selected: controller.showExpensesOnly.value,
+                showCheckmark: false,
+                backgroundColor: AppColors.surface,
+                selectedColor: const Color(0xFFFBE4E4),
+                side: BorderSide(
+                  color: controller.showExpensesOnly.value
+                      ? AppColors.error.withValues(alpha: 0.45)
+                      : AppColors.neutral300,
+                ),
+                label: Text(
+                  'Only expenses',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: controller.showExpensesOnly.value
+                        ? AppColors.error
+                        : AppColors.neutral700,
+                  ),
+                ),
+                avatar: Icon(
+                  controller.showExpensesOnly.value
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  size: 16.sp,
+                  color: controller.showExpensesOnly.value
+                      ? AppColors.error
+                      : AppColors.neutral500,
+                ),
+                onSelected: controller.setShowExpensesOnly,
+              ),
+              if (controller.showExpensesOnly.value)
+                FilterChip(
+                  selected: controller.includeAddedToDueExpenses.value,
+                  showCheckmark: false,
+                  backgroundColor: AppColors.surface,
+                  selectedColor: const Color(0xFFF9E9D8),
+                  side: BorderSide(
+                    color: controller.includeAddedToDueExpenses.value
+                        ? AppColors.accent.withValues(alpha: 0.45)
+                        : AppColors.neutral300,
+                  ),
+                  label: Text(
+                    'Company Due',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: controller.includeAddedToDueExpenses.value
+                          ? AppColors.accentDark
+                          : AppColors.neutral700,
+                    ),
+                  ),
+                  avatar: Icon(
+                    controller.includeAddedToDueExpenses.value
+                        ? Icons.check_rounded
+                        : Icons.add_rounded,
+                    size: 16.sp,
+                    color: controller.includeAddedToDueExpenses.value
+                        ? AppColors.accentDark
+                        : AppColors.neutral500,
+                  ),
+                  onSelected: controller.setIncludeAddedToDueExpenses,
+                ),
+              if (controller.showExpensesOnly.value)
+                FilterChip(
+                  selected: controller.includeMainBalanceExpenses.value,
+                  showCheckmark: false,
+                  backgroundColor: AppColors.surface,
+                  selectedColor: const Color(0xFFE2EEFF),
+                  side: BorderSide(
+                    color: controller.includeMainBalanceExpenses.value
+                        ? AppColors.info.withValues(alpha: 0.45)
+                        : AppColors.neutral300,
+                  ),
+                  label: Text(
+                    'Main Balance',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: controller.includeMainBalanceExpenses.value
+                          ? AppColors.info
+                          : AppColors.neutral700,
+                    ),
+                  ),
+                  avatar: Icon(
+                    controller.includeMainBalanceExpenses.value
+                        ? Icons.check_rounded
+                        : Icons.account_balance_wallet_outlined,
+                    size: 16.sp,
+                    color: controller.includeMainBalanceExpenses.value
+                        ? AppColors.info
+                        : AppColors.neutral500,
+                  ),
+                  onSelected: controller.setIncludeMainBalanceExpenses,
+                ),
+            ],
+          ),
+          SizedBox(height: AppSpacing.sm),
           Text(
             '${controller.visibleTransactions.length} result${controller.visibleTransactions.length == 1 ? '' : 's'}',
             style: AppTextStyles.bodySmall.copyWith(
@@ -232,6 +336,8 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final totalTransactions = transactions.length;
+    final expenseCount = transactions.where((item) => item.isExpense).length;
+    final paymentCount = totalTransactions - expenseCount;
     final totalAmount = transactions.fold<double>(
       0,
       (sum, transaction) => sum + _toDouble(transaction.amount),
@@ -240,8 +346,13 @@ class _SummaryCard extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(20.w),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFEEF1FF), Color(0xFFFFF4E8)],
+        ),
         borderRadius: AppRadius.lg,
+        border: Border.all(color: AppColors.neutral200),
         boxShadow: AppShadows.md,
       ),
       child: Column(
@@ -282,6 +393,27 @@ class _SummaryCard extends StatelessWidget {
           _MetaChip(
             icon: Icons.paid_outlined,
             label: 'Total Amount: ৳ ${_formatAmount(totalAmount)}',
+            color: AppColors.primary,
+            backgroundColor: AppColors.surface,
+          ),
+          SizedBox(height: 8.h),
+          Wrap(
+            spacing: 8.w,
+            runSpacing: 8.h,
+            children: [
+              _MetaChip(
+                icon: Icons.arrow_upward_rounded,
+                label: '$paymentCount Payments',
+                color: AppColors.success,
+                backgroundColor: AppColors.successLight,
+              ),
+              _MetaChip(
+                icon: Icons.arrow_downward_rounded,
+                label: '$expenseCount Expenses',
+                color: AppColors.error,
+                backgroundColor: AppColors.errorLight,
+              ),
+            ],
           ),
         ],
       ),
@@ -298,6 +430,7 @@ class _TransactionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final amount = _toDouble(transaction.amount);
+    final isExpense = transaction.isExpense;
     final companyName = transaction.companyName.trim().isEmpty
         ? 'Unknown company'
         : transaction.companyName;
@@ -312,8 +445,15 @@ class _TransactionCard extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.all(16.w),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: isExpense
+                ? const Color(0xFFFFFBF7)
+                : const Color(0xFFF8FCFF),
             borderRadius: AppRadius.lg,
+            border: Border.all(
+              color: isExpense
+                  ? AppColors.accent.withValues(alpha: 0.35)
+                  : AppColors.info.withValues(alpha: 0.30),
+            ),
             boxShadow: AppShadows.sm,
           ),
           child: Column(
@@ -344,7 +484,7 @@ class _TransactionCard extends StatelessWidget {
                   Text(
                     '৳ ${_formatAmount(amount)}',
                     style: AppTextStyles.headlineMedium.copyWith(
-                      color: AppColors.primary,
+                      color: isExpense ? AppColors.accentDark : AppColors.info,
                     ),
                   ),
                 ],
@@ -357,15 +497,23 @@ class _TransactionCard extends StatelessWidget {
                   _MetaChip(
                     icon: Icons.category_outlined,
                     label: transactionTypeLabel,
+                    color: isExpense ? AppColors.accentDark : AppColors.info,
+                    backgroundColor: isExpense
+                        ? AppColors.accentLight
+                        : AppColors.infoLight,
                   ),
                   if (transaction.isExpense)
                     _MetaChip(
                       icon: Icons.source_outlined,
                       label: transaction.expenseSourceLabel,
+                      color: AppColors.accentDark,
+                      backgroundColor: AppColors.accentLight,
                     ),
                   _MetaChip(
                     icon: Icons.calendar_today_outlined,
                     label: dateLabel,
+                    color: AppColors.neutral700,
+                    backgroundColor: AppColors.neutral100,
                   ),
                 ],
               ),
@@ -378,28 +526,32 @@ class _TransactionCard extends StatelessWidget {
 }
 
 class _MetaChip extends StatelessWidget {
-  const _MetaChip({required this.icon, required this.label});
+  const _MetaChip({
+    required this.icon,
+    required this.label,
+    this.color = AppColors.primary,
+    this.backgroundColor = AppColors.primarySurface,
+  });
 
   final IconData icon;
   final String label;
+  final Color color;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
       decoration: BoxDecoration(
-        color: AppColors.primarySurface,
+        color: backgroundColor,
         borderRadius: AppRadius.md,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15.sp, color: AppColors.primary),
+          Icon(icon, size: 15.sp, color: color),
           SizedBox(width: 6.w),
-          Text(
-            label,
-            style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary),
-          ),
+          Text(label, style: AppTextStyles.bodySmall.copyWith(color: color)),
         ],
       ),
     );

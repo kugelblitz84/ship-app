@@ -169,7 +169,7 @@ class TransactionModel {
       return 'From Main Balance';
     }
     if (normalized == 'company') {
-      return 'Added to Due';
+      return 'Company Due';
     }
     if (normalized.isEmpty) {
       return 'N/A';

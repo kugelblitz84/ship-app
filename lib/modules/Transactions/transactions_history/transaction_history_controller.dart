@@ -30,6 +30,9 @@ class TransactionHistoryController extends GetxController {
   final RxString selectedCompany = ''.obs;
   final Rxn<DateTime> selectedDate = Rxn<DateTime>();
   final Rx<TransactionSortOption> sortOption = TransactionSortOption.newest.obs;
+  final RxBool showExpensesOnly = false.obs;
+  final RxBool includeAddedToDueExpenses = true.obs;
+  final RxBool includeMainBalanceExpenses = true.obs;
 
   @override
   void onInit() {
@@ -90,6 +93,7 @@ class TransactionHistoryController extends GetxController {
       final company = transaction.companyName.trim().toLowerCase();
       final companyFilterMatch =
           selectedCompanyFilter.isEmpty || company == selectedCompanyFilter;
+      final expenseToggleMatch = _matchesExpenseToggleFilter(transaction);
       final route = transaction.routeLabel.toLowerCase();
       final amount = transaction.amount.toLowerCase();
       final type = transaction.type.toLowerCase();
@@ -111,6 +115,7 @@ class TransactionHistoryController extends GetxController {
           yearMatch &&
           dateMatch &&
           companyFilterMatch &&
+          expenseToggleMatch &&
           searchMatch;
     }).toList();
 
@@ -143,7 +148,10 @@ class TransactionHistoryController extends GetxController {
       selectedMonth.value != 0 ||
       selectedYear.value != 0 ||
       selectedCompany.value.trim().isNotEmpty ||
-      selectedDate.value != null;
+      selectedDate.value != null ||
+      showExpensesOnly.value ||
+      !includeAddedToDueExpenses.value ||
+      !includeMainBalanceExpenses.value;
 
   List<int> get availableYears {
     final years =
@@ -190,6 +198,25 @@ class TransactionHistoryController extends GetxController {
     selectedDate.value = date;
   }
 
+  void setShowExpensesOnly(bool value) {
+    showExpensesOnly.value = value;
+
+    // Keep UI and filter state aligned: expense-source filters are relevant
+    // only while expense-only mode is active.
+    if (!value) {
+      includeAddedToDueExpenses.value = true;
+      includeMainBalanceExpenses.value = true;
+    }
+  }
+
+  void setIncludeAddedToDueExpenses(bool value) {
+    includeAddedToDueExpenses.value = value;
+  }
+
+  void setIncludeMainBalanceExpenses(bool value) {
+    includeMainBalanceExpenses.value = value;
+  }
+
   void clearAllFilters() {
     searchController.clear();
     searchQuery.value = '';
@@ -197,6 +224,9 @@ class TransactionHistoryController extends GetxController {
     selectedYear.value = 0;
     selectedCompany.value = '';
     selectedDate.value = null;
+    showExpensesOnly.value = false;
+    includeAddedToDueExpenses.value = true;
+    includeMainBalanceExpenses.value = true;
     sortOption.value = TransactionSortOption.newest;
   }
 
@@ -250,5 +280,34 @@ class TransactionHistoryController extends GetxController {
       return double.tryParse(sanitized) ?? 0;
     }
     return 0;
+  }
+
+  bool _matchesExpenseToggleFilter(TransactionModel transaction) {
+    final isExpense = transaction.isExpense;
+
+    if (showExpensesOnly.value && !isExpense) {
+      return false;
+    }
+
+    if (!isExpense) {
+      return true;
+    }
+
+    final source = transaction.normalizedExpenseSource;
+    final includeDueExpense =
+        source == 'company' && includeAddedToDueExpenses.value;
+    final includeMainBalanceExpense =
+        source == 'main-balance' && includeMainBalanceExpenses.value;
+
+    // Preserve unknown expense source entries unless explicitly narrowed.
+    final includeUnknownExpenseSource =
+        source != 'company' &&
+        source != 'main-balance' &&
+        includeAddedToDueExpenses.value &&
+        includeMainBalanceExpenses.value;
+
+    return includeDueExpense ||
+        includeMainBalanceExpense ||
+        includeUnknownExpenseSource;
   }
 }

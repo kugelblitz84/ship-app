@@ -262,7 +262,7 @@ class HomeView extends GetView<HomeController> {
                               ),
                               Obx(
                                 () => Text(
-                                  '৳ ${controller.totalFundReceived.value}',
+                                  '৳ ${controller.totalFundReceived}',
                                   style: AppTextStyles.labelMedium.copyWith(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w700,
@@ -509,7 +509,7 @@ class HomeView extends GetView<HomeController> {
       _DashboardStatItem(
         icon: Icons.directions_boat_rounded,
         label: 'Ships',
-        value: controller.shipCount.value.toString(),
+        value: controller.shipCount.toString(),
         color: AppColors.primary,
         bgColor: AppColors.primarySurface,
         onTap: () => Get.toNamed(AppRoutes.shipList),
@@ -517,7 +517,7 @@ class HomeView extends GetView<HomeController> {
       _DashboardStatItem(
         icon: Icons.business_rounded,
         label: 'Companies',
-        value: controller.companyCount.value.toString(),
+        value: controller.companyCount.toString(),
         color: AppColors.accent,
         bgColor: AppColors.accentLight,
         onTap: () => Get.toNamed(AppRoutes.companyList),
@@ -525,7 +525,7 @@ class HomeView extends GetView<HomeController> {
       _DashboardStatItem(
         icon: Icons.route_rounded,
         label: 'Trips',
-        value: controller.tripCount.value.toString(),
+        value: controller.tripCount.toString(),
         color: AppColors.info,
         bgColor: AppColors.infoLight,
         onTap: () => Get.toNamed(AppRoutes.tripHistory),
@@ -533,7 +533,7 @@ class HomeView extends GetView<HomeController> {
       _DashboardStatItem(
         icon: Icons.receipt_long_rounded,
         label: 'Transactions',
-        value: controller.transactionCount.value.toString(),
+        value: controller.transactionCount.toString(),
         color: AppColors.success,
         bgColor: AppColors.successLight,
         onTap: () => Get.toNamed(AppRoutes.transactionHistory),
@@ -654,13 +654,14 @@ class HomeView extends GetView<HomeController> {
   }
 
   Widget _buildMonthlyFinancialCard() {
-    //final billed = controller.monthlyFundOwed.value;
-    //final received = controller.monthlyFundReceived.value;
-    //final totalDue = controller.monthlyTotalDue.value;
-    final progress = controller.monthlyFundOwed.value > 0
-        ? (controller.monthlyFundReceived.value /
-                  controller.monthlyFundOwed.value)
-              .clamp(0.0, 1.0)
+    //final billed = controller.monthlyFundOwed;
+    //final received = controller.monthlyFundReceived;
+    //final totalDue = controller.monthlyTotalDue;
+    final progress = controller.monthlyFundOwed > 0
+        ? (controller.monthlyFundReceived / controller.monthlyFundOwed).clamp(
+            0.0,
+            1.0,
+          )
         : 0.0;
 
     return Container(
@@ -694,7 +695,7 @@ class HomeView extends GetView<HomeController> {
           SizedBox(height: 4.h),
           Obx(
             () => Text(
-              '৳ ${_formatCurrency(controller.monthlyTotalDue.value)}',
+              '৳ ${_formatCurrency(controller.monthlyTotalDue)}',
               style: AppTextStyles.displayMedium.copyWith(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
@@ -716,7 +717,7 @@ class HomeView extends GetView<HomeController> {
           SizedBox(height: 6.h),
           Obx(
             () => Text(
-              controller.monthlyFundOwed.value > 0
+              controller.monthlyFundOwed > 0
                   ? '${(progress * 100).toStringAsFixed(1)}% collected this month'
                   : 'No financial activity this month',
               style: AppTextStyles.caption.copyWith(
@@ -731,7 +732,7 @@ class HomeView extends GetView<HomeController> {
                 () => Expanded(
                   child: _buildFinanceStat(
                     'Total Billed',
-                    '৳ ${_formatCurrency(controller.monthlyFundOwed.value)}',
+                    '৳ ${_formatCurrency(controller.monthlyFundOwed)}',
                     Icons.trending_up_rounded,
                     AppColors.warningLight,
                     labelColor: Colors.white.withValues(alpha: 0.7),
@@ -748,7 +749,7 @@ class HomeView extends GetView<HomeController> {
                 () => Expanded(
                   child: _buildFinanceStat(
                     'Current Balance',
-                    '৳ ${_formatCurrency(controller.monthlyFundReceived.value)}',
+                    '৳ ${_formatCurrency(controller.monthlyFundReceived)}',
                     Icons.trending_down_rounded,
                     AppColors.successLight,
                     labelColor: Colors.white.withValues(alpha: 0.7),
@@ -764,12 +765,14 @@ class HomeView extends GetView<HomeController> {
   }
 
   Widget _buildLifetimeFinancialCard() {
-    //final billed = controller.totalFundOwed.value;
-    //final received = controller.totalFundReceived.value;
-    //final totalDue = controller.totalDue.value;
-    final progress = controller.totalFundOwed.value > 0
-        ? (controller.totalFundReceived.value / controller.totalFundOwed.value)
-              .clamp(0.0, 1.0)
+    //final billed = controller.totalFundOwed;
+    //final received = controller.totalFundReceived;
+    //final totalDue = controller.totalDue;
+    final progress = controller.totalFundOwed > 0
+        ? (controller.totalFundReceived / controller.totalFundOwed).clamp(
+            0.0,
+            1.0,
+          )
         : 0.0;
 
     return Container(
@@ -804,7 +807,7 @@ class HomeView extends GetView<HomeController> {
           SizedBox(height: 4.h),
           Obx(
             () => Text(
-              '৳ ${_formatCurrency(controller.totalDue.value)}',
+              '৳ ${_formatCurrency(controller.totalDue)}',
               style: AppTextStyles.displayMedium.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
@@ -826,7 +829,7 @@ class HomeView extends GetView<HomeController> {
           SizedBox(height: 6.h),
           Obx(
             () => Text(
-              controller.totalFundOwed.value > 0
+              controller.totalFundOwed > 0
                   ? '${(progress * 100).toStringAsFixed(1)}% collected'
                   : 'No due amount',
               style: AppTextStyles.caption.copyWith(
@@ -841,7 +844,7 @@ class HomeView extends GetView<HomeController> {
                 () => Expanded(
                   child: _buildFinanceStat(
                     'Total Billed',
-                    '৳ ${_formatCurrency(controller.totalFundOwed.value)}',
+                    '৳ ${_formatCurrency(controller.totalFundOwed)}',
                     Icons.trending_up_rounded,
                     AppColors.warning,
                     labelColor: AppColors.textSecondary,
@@ -854,7 +857,7 @@ class HomeView extends GetView<HomeController> {
                 () => Expanded(
                   child: _buildFinanceStat(
                     'Lifetime Balance',
-                    '৳ ${_formatCurrency(controller.totalFundReceived.value)}',
+                    '৳ ${_formatCurrency(controller.totalFundReceived)}',
                     Icons.trending_down_rounded,
                     AppColors.success,
                     labelColor: AppColors.textSecondary,
@@ -897,10 +900,7 @@ class HomeView extends GetView<HomeController> {
             children: [
               Text(
                 title,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: titleColor,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: AppTextStyles.labelMedium.copyWith(color: titleColor),
               ),
               Text(
                 subtitle,
@@ -1656,27 +1656,11 @@ class HomeView extends GetView<HomeController> {
     return 'Good Evening';
   }
 
-  String _formatCurrency(double value) {
-    return value.toInt().toString();
-    if (value >= 1e7) {
-      return '${(value / 1e7).toStringAsFixed(2)} Cr';
-    }
-    if (value >= 1e5) {
-      return '${(value / 1e5).toStringAsFixed(2)} L';
-    }
-    if (value % 1 == 0) {
-      // Add commas to integer
-      return value.toInt().toString().replaceAllMapped(
-        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-        (m) => '${m[1]},',
-      );
-    }
-    return value
-        .toStringAsFixed(2)
-        .replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]},',
-        );
+  String _formatCurrency(int value) {
+    return value.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]},',
+    );
   }
 
   IconData _getTransactionTypeIcon(String type) {

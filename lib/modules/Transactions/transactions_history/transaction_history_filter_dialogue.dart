@@ -129,6 +129,115 @@ class TransactionHistoryFilterDialog extends StatelessWidget {
                     onChanged: controller.onCompanyChanged,
                   ),
                   SizedBox(height: AppSpacing.base),
+                  // Container(
+                  //   width: double.infinity,
+                  //   padding: EdgeInsets.all(12.w),
+                  //   decoration: BoxDecoration(
+                  //     color: AppColors.primarySurface,
+                  //     borderRadius: AppRadius.md,
+                  //     border: Border.all(color: AppColors.neutral200),
+                  //   ),
+                  //   child: Column(
+                  //     crossAxisAlignment: CrossAxisAlignment.start,
+                  //     children: [
+                  //       Text(
+                  //         'Expense filters',
+                  //         style: AppTextStyles.labelMedium.copyWith(
+                  //           color: AppColors.primary,
+                  //         ),
+                  //       ),
+                  //       SizedBox(height: 8.h),
+                  //       SwitchListTile.adaptive(
+                  //         contentPadding: EdgeInsets.zero,
+                  //         dense: true,
+                  //         value: controller.showExpensesOnly.value,
+                  //         title: const Text('Show only expenses'),
+                  //         subtitle: const Text('Hide payment transactions'),
+                  //         onChanged: controller.setShowExpensesOnly,
+                  //       ),
+                  //       SizedBox(height: 4.h),
+                  //       Wrap(
+                  //         spacing: 8.w,
+                  //         runSpacing: 8.h,
+                  //         children: [
+                  //           FilterChip(
+                  //             selected:
+                  //                 controller.includeAddedToDueExpenses.value,
+                  //             showCheckmark: false,
+                  //             backgroundColor: AppColors.surface,
+                  //             selectedColor: const Color(0xFFF9E9D8),
+                  //             side: BorderSide(
+                  //               color:
+                  //                   controller.includeAddedToDueExpenses.value
+                  //                   ? AppColors.accent.withValues(alpha: 0.45)
+                  //                   : AppColors.neutral300,
+                  //             ),
+                  //             label: Text(
+                  //               'Company Due',
+                  //               style: AppTextStyles.labelSmall.copyWith(
+                  //                 fontWeight: FontWeight.w600,
+                  //                 color:
+                  //                     controller.includeAddedToDueExpenses.value
+                  //                     ? AppColors.accentDark
+                  //                     : AppColors.neutral700,
+                  //               ),
+                  //             ),
+                  //             avatar: Icon(
+                  //               controller.includeAddedToDueExpenses.value
+                  //                   ? Icons.check_rounded
+                  //                   : Icons.add_rounded,
+                  //               size: 16.sp,
+                  //               color:
+                  //                   controller.includeAddedToDueExpenses.value
+                  //                   ? AppColors.accentDark
+                  //                   : AppColors.neutral500,
+                  //             ),
+                  //             onSelected:
+                  //                 controller.setIncludeAddedToDueExpenses,
+                  //           ),
+                  //           FilterChip(
+                  //             selected:
+                  //                 controller.includeMainBalanceExpenses.value,
+                  //             showCheckmark: false,
+                  //             backgroundColor: AppColors.surface,
+                  //             selectedColor: const Color(0xFFE2EEFF),
+                  //             side: BorderSide(
+                  //               color:
+                  //                   controller.includeMainBalanceExpenses.value
+                  //                   ? AppColors.info.withValues(alpha: 0.45)
+                  //                   : AppColors.neutral300,
+                  //             ),
+                  //             label: Text(
+                  //               'Main Balance',
+                  //               style: AppTextStyles.labelSmall.copyWith(
+                  //                 fontWeight: FontWeight.w600,
+                  //                 color:
+                  //                     controller
+                  //                         .includeMainBalanceExpenses
+                  //                         .value
+                  //                     ? AppColors.info
+                  //                     : AppColors.neutral700,
+                  //               ),
+                  //             ),
+                  //             avatar: Icon(
+                  //               controller.includeMainBalanceExpenses.value
+                  //                   ? Icons.check_rounded
+                  //                   : Icons.account_balance_wallet_outlined,
+                  //               size: 16.sp,
+                  //               color:
+                  //                   controller.includeMainBalanceExpenses.value
+                  //                   ? AppColors.info
+                  //                   : AppColors.neutral500,
+                  //             ),
+                  //             onSelected:
+                  //                 controller.setIncludeMainBalanceExpenses,
+                  //           ),
+                  //         ],
+                  //       ),
+                  //     ],
+                  //   ),
+                  // ),
+                  SizedBox(height: AppSpacing.base),
                   Row(
                     children: [
                       Expanded(
@@ -230,6 +339,33 @@ class TransactionHistoryFilterDialog extends StatelessWidget {
         _ActiveFilterChip(
           label: 'Date: ${_formatDateLabel(controller.selectedDate.value)}',
           onRemove: () => controller.setDateFilter(null),
+        ),
+      );
+    }
+
+    if (controller.showExpensesOnly.value) {
+      chips.add(
+        _ActiveFilterChip(
+          label: 'Only expenses',
+          onRemove: () => controller.setShowExpensesOnly(false),
+        ),
+      );
+    }
+
+    if (!controller.includeAddedToDueExpenses.value) {
+      chips.add(
+        _ActiveFilterChip(
+          label: 'Exclude: Company Due',
+          onRemove: () => controller.setIncludeAddedToDueExpenses(true),
+        ),
+      );
+    }
+
+    if (!controller.includeMainBalanceExpenses.value) {
+      chips.add(
+        _ActiveFilterChip(
+          label: 'Exclude: Main Balance',
+          onRemove: () => controller.setIncludeMainBalanceExpenses(true),
         ),
       );
     }

@@ -33,23 +33,22 @@ class HomeController extends GetxController {
 
   String? _loadedUserId;
 
-  // ── Dashboard Stats ──────────────────────────────────────────────────
-  final RxInt shipCount = 0.obs;
-  final RxInt companyCount = 0.obs;
-  final RxInt tripCount = 0.obs;
-  final RxInt transactionCount = 0.obs;
-
-  // ── Financial Summary ────────────────────────────────────────────────
-  final RxDouble totalFundOwed = 0.0.obs;
-  final RxDouble totalFundReceived = 0.0.obs;
-  final RxDouble totalDue = 0.0.obs;
-  final RxDouble monthlyFundOwed = 0.0.obs;
-  final RxDouble monthlyFundReceived = 0.0.obs;
-  final RxDouble monthlyTotalDue = 0.0.obs;
+  // Dashboard and financial values are now owned by HomeModel.
+  int get shipCount => homeModel.value?.shipCount ?? 0;
+  int get companyCount => homeModel.value?.companyCount ?? 0;
+  int get tripCount => homeModel.value?.tripCount ?? 0;
+  int get transactionCount => homeModel.value?.transactionCount ?? 0;
+  int get totalFundOwed => homeModel.value?.totalFundOwed ?? 0;
+  int get totalFundReceived => homeModel.value?.totalFundReceived ?? 0;
+  int get totalDue => homeModel.value?.totalDue ?? 0;
+  int get monthlyFundOwed => homeModel.value?.monthlyFundOwed ?? 0;
+  int get monthlyFundReceived => homeModel.value?.monthlyFundReceived ?? 0;
+  int get monthlyTotalDue => homeModel.value?.monthlyTotalDue ?? 0;
+  List<TripModel> get recentTrips => homeModel.value?.recentTrips ?? const [];
+  List<TransactionModel> get recentTransactions =>
+      homeModel.value?.recentTransactions ?? const [];
 
   // ── Recent Items ─────────────────────────────────────────────────────
-  final RxList<TripModel> recentTrips = <TripModel>[].obs;
-  final RxList<TransactionModel> recentTransactions = <TransactionModel>[].obs;
   final RxList<TransactionModel> allTransactions = <TransactionModel>[].obs;
   final RxList<TripModel> allTrips = <TripModel>[].obs;
   List<CompanyModel> companies = [];
@@ -115,7 +114,7 @@ class HomeController extends GetxController {
       showErrorSnackbar: false,
     );
     if (response.isSuccess && response.data != null) {
-      shipCount.value = response.data!.length;
+      _updateHomeModel(shipCount: response.data!.length);
     }
   }
 
@@ -127,7 +126,7 @@ class HomeController extends GetxController {
     );
     if (response.isSuccess && response.data != null) {
       companies = response.data!;
-      companyCount.value = companies.length;
+      _updateHomeModel(companyCount: companies.length);
     }
   }
 
@@ -139,9 +138,9 @@ class HomeController extends GetxController {
     );
     if (response.isSuccess && response.data != null) {
       final trips = response.data!;
-      tripCount.value = trips.length;
+      _updateHomeModel(tripCount: trips.length);
       allTrips.assignAll(trips);
-      recentTrips.value = trips.take(5).toList();
+      _updateHomeModel(recentTrips: trips.take(5).toList());
     }
   }
 
@@ -153,19 +152,19 @@ class HomeController extends GetxController {
     );
     if (response.isSuccess && response.data != null) {
       final transactions = response.data!;
-      transactionCount.value = transactions.length;
+      _updateHomeModel(transactionCount: transactions.length);
       allTransactions.assignAll(transactions);
-      recentTransactions.value = transactions.take(5).toList();
+      _updateHomeModel(recentTransactions: transactions.take(5).toList());
     }
   }
 
   Future<void> _loadBalanceData() async {
     // ── Lifetime totals from company summaries (source of truth) ─────
-    totalFundOwed.value = _sumCompanyField((c) => c.totalAmountBilled);
-    totalDue.value = _sumCompanyField((c) => c.totalAmountDue);
+    final totalFundOwedValue = _sumCompanyField((c) => c.totalAmountBilled);
+    final totalDueValue = _sumCompanyField((c) => c.totalAmountDue);
 
     // ── Lifetime balance (cash-in-hand): payments − main-balance expenses
-    totalFundReceived.value = _sumTransactions(
+    final totalFundReceivedValue = _sumTransactions(
       allTransactions,
       payments: true,
       mainBalanceExpenses: true,
@@ -175,9 +174,9 @@ class HomeController extends GetxController {
     final now = DateTime.now();
 
     // Monthly billed = sum of trip bills this month
-    monthlyFundOwed.value = allTrips
+    final monthlyFundOwedValue = allTrips
         .where((t) => _isCurrentMonth(t.date, now))
-        .fold(0.0, (sum, t) => sum + _toDouble(t.totalBill));
+        .fold(0, (sum, t) => sum + _toInt(t.totalBill));
 
     // Filter transactions to current month
     final monthlyTx = allTransactions
@@ -185,7 +184,7 @@ class HomeController extends GetxController {
         .toList();
 
     // Monthly balance (cash-in-hand): payments − main-balance expenses
-    monthlyFundReceived.value = _sumTransactions(
+    final monthlyFundReceivedValue = _sumTransactions(
       monthlyTx,
       payments: true,
       mainBalanceExpenses: true,
@@ -198,28 +197,67 @@ class HomeController extends GetxController {
       'expenses',
       source: 'company',
     );
-    monthlyTotalDue.value =
-        (monthlyFundOwed.value + monthlyCompanyExpenses - monthlyPayments)
-            .clamp(0, double.infinity);
+    final monthlyTotalDueValue =
+        monthlyFundOwedValue + monthlyCompanyExpenses - monthlyPayments;
+
+    _updateHomeModel(
+      totalFundOwed: totalFundOwedValue,
+      totalFundReceived: totalFundReceivedValue,
+      totalDue: totalDueValue,
+      monthlyFundOwed: monthlyFundOwedValue,
+      monthlyFundReceived: monthlyFundReceivedValue,
+      monthlyTotalDue: monthlyTotalDueValue < 0 ? 0 : monthlyTotalDueValue,
+    );
+  }
+
+  void _updateHomeModel({
+    int? shipCount,
+    int? companyCount,
+    int? tripCount,
+    int? transactionCount,
+    int? totalFundOwed,
+    int? totalFundReceived,
+    int? totalDue,
+    int? monthlyFundOwed,
+    int? monthlyFundReceived,
+    int? monthlyTotalDue,
+    List<TripModel>? recentTrips,
+    List<TransactionModel>? recentTransactions,
+  }) {
+    final current = homeModel.value ?? HomeModel();
+    homeModel.value = current.copyWith(
+      shipCount: shipCount,
+      companyCount: companyCount,
+      tripCount: tripCount,
+      transactionCount: transactionCount,
+      totalFundOwed: totalFundOwed,
+      totalFundReceived: totalFundReceived,
+      totalDue: totalDue,
+      monthlyFundOwed: monthlyFundOwed,
+      monthlyFundReceived: monthlyFundReceived,
+      monthlyTotalDue: monthlyTotalDue,
+      recentTrips: recentTrips,
+      recentTransactions: recentTransactions,
+    );
   }
 
   // ── Reusable helpers ─────────────────────────────────────────────────
 
   /// Sum a numeric string field across all loaded companies.
-  double _sumCompanyField(String Function(CompanyModel) selector) {
-    return companies.fold(0.0, (sum, c) => sum + _toDouble(selector(c)));
+  int _sumCompanyField(String Function(CompanyModel) selector) {
+    return companies.fold(0, (sum, c) => sum + _toInt(selector(c)));
   }
 
   /// Compute cash-in-hand from a list of transactions:
   /// + payment amounts, − main-balance expense amounts.
-  double _sumTransactions(
+  int _sumTransactions(
     List<TransactionModel> txns, {
     required bool payments,
     required bool mainBalanceExpenses,
   }) {
-    double total = 0;
+    int total = 0;
     for (final t in txns) {
-      final amount = _toDouble(t.amount);
+      final amount = _toInt(t.amount);
       if (amount <= 0) continue;
       final category = t.transactionType.trim().toLowerCase();
       final source = t.expenseSource.trim().toLowerCase();
@@ -232,18 +270,18 @@ class HomeController extends GetxController {
         total -= amount;
       }
     }
-    return total.clamp(0, double.infinity);
+    return total < 0 ? 0 : total;
   }
 
   /// Sum amounts for a specific transaction category (and optional source).
-  double _sumByCategory(
+  int _sumByCategory(
     List<TransactionModel> txns,
     String category, {
     String? source,
   }) {
-    double total = 0;
+    int total = 0;
     for (final t in txns) {
-      final amount = _toDouble(t.amount);
+      final amount = _toInt(t.amount);
       if (amount <= 0) continue;
       if (t.transactionType.trim().toLowerCase() != category) continue;
       if (source != null && t.expenseSource.trim().toLowerCase() != source) {
@@ -265,13 +303,13 @@ class HomeController extends GetxController {
     return DateTime.tryParse(trimmed);
   }
 
-  double _toDouble(dynamic value) {
+  int _toInt(dynamic value) {
     if (value == null) return 0;
-    if (value is num) return value.toDouble();
+    if (value is num) return value.toInt();
     if (value is String) {
       final sanitized = value.replaceAll(',', '').trim();
       if (sanitized.isEmpty) return 0;
-      return double.tryParse(sanitized) ?? 0;
+      return int.tryParse(sanitized) ?? 0;
     }
     return 0;
   }

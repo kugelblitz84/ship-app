@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/themes/themes.dart';
 import '../../../core/widgets/widgets.dart';
@@ -68,6 +69,7 @@ class CompanyDetailsView extends GetView<CompanyDetailsController> {
           );
         }),
       ],
+      onRefresh: controller.onRefresh,
       child: Obx(() {
         final company = controller.company;
 
@@ -131,7 +133,10 @@ class CompanyDetailsView extends GetView<CompanyDetailsController> {
             _FundSummaryCard(
               totalAmountBilled: controller.totalAmountBilled,
               totalAmountReceived: controller.totalAmountReceived,
-              totalAmountExpenses: controller.totalAmountExpenses,
+              totalAmountCompanyAddedExpenses:
+                  controller.totalAmountCompanyAddedExpenses,
+              totalAmountMainBalanceExpenses:
+                  controller.totalAmountMainBalanceExpenses,
               totalAmountDue: controller.totalAmountDue,
             ),
             SizedBox(height: AppSpacing.base),
@@ -190,7 +195,6 @@ class CompanyDetailsView extends GetView<CompanyDetailsController> {
           ],
         );
       }),
-      onRefresh: controller.onRefresh,
     );
   }
 
@@ -283,164 +287,463 @@ class _StatementActionsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canGenerate =
-        controller.company != null &&
-        !controller.isLoading &&
-        !controller.isSaving.value &&
-        !controller.isDeleting.value;
+    return Obx(() {
+      final canGenerate =
+          controller.company != null &&
+          !controller.isLoading &&
+          !controller.isSaving.value &&
+          !controller.isDeleting.value;
 
-    final totalRecords =
-        controller.trips.length + controller.transactions.length;
-    final expenseCount = controller.transactions
-        .where(
-          (item) => item.transactionType.trim().toLowerCase() == 'expenses',
-        )
-        .length;
-    final paymentCount = controller.transactions.length - expenseCount;
+      final totalRecords =
+          controller.trips.length + controller.transactions.length;
+      final expenseCount = controller.transactions
+          .where(
+            (item) => item.transactionType.trim().toLowerCase() == 'expenses',
+          )
+          .length;
+      final paymentCount = controller.transactions.length - expenseCount;
 
-    return Container(
-      padding: EdgeInsets.all(18.w),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.lg,
-        boxShadow: AppShadows.sm,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 36.w,
-                height: 36.w,
-                decoration: BoxDecoration(
-                  color: AppColors.primarySurface,
-                  borderRadius: AppRadius.sm,
-                ),
-                child: Icon(
-                  Icons.picture_as_pdf_rounded,
-                  size: 18.sp,
-                  color: AppColors.primary,
-                ),
-              ),
-              SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Statement PDF', style: AppTextStyles.headlineSmall),
-                    SizedBox(height: 2.h),
-                    Text(
-                      'Generate a date-grouped company statement with trips, payments, and expenses.',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.neutral500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: AppSpacing.md),
-
-          Wrap(
-            spacing: 8.w,
-            runSpacing: 8.h,
-            children: [
-              _InfoChip(
-                icon: Icons.route_rounded,
-                label: '${controller.trips.length} trips',
-              ),
-              _InfoChip(
-                icon: Icons.payments_rounded,
-                label: '$paymentCount payments',
-              ),
-              _InfoChip(
-                icon: Icons.receipt_rounded,
-                label: '$expenseCount expenses',
-              ),
-              _InfoChip(
-                icon: Icons.dataset_rounded,
-                label: '$totalRecords records',
-              ),
-            ],
-          ),
-
-          SizedBox(height: AppSpacing.md),
-
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(12.w),
-            decoration: BoxDecoration(
-              color: AppColors.primarySurface,
-              borderRadius: AppRadius.md,
-              border: Border.all(
-                color: AppColors.primary.withValues(alpha: 0.12),
-              ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      return Container(
+        padding: EdgeInsets.all(18.w),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: AppRadius.lg,
+          boxShadow: AppShadows.sm,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Icon(
-                  Icons.info_outline_rounded,
-                  size: 18.sp,
-                  color: AppColors.primary,
+                Container(
+                  width: 36.w,
+                  height: 36.w,
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySurface,
+                    borderRadius: AppRadius.sm,
+                  ),
+                  child: Icon(
+                    Icons.picture_as_pdf_rounded,
+                    size: 18.sp,
+                    color: AppColors.primary,
+                  ),
                 ),
-                SizedBox(width: 8.w),
+                SizedBox(width: AppSpacing.sm),
                 Expanded(
-                  child: Text(
-                    'Preview lets you review the statement before saving. Quick save generates and downloads the PDF immediately.',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Statement PDF', style: AppTextStyles.headlineSmall),
+                      SizedBox(height: 2.h),
+                      Text(
+                        'Generate a company statement for selected months or a custom date range.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.neutral500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-
-          SizedBox(height: AppSpacing.md),
-
-          Column(
-            children: [
-              SizedBox(
-                width: double.infinity,
-                child: AppButton(
-                  text: 'Preview & Save Options',
-                  icon: Icons.visibility_outlined,
-                  onPressed: canGenerate
-                      ? controller.onShowPreviewPressed
-                      : null,
+            SizedBox(height: AppSpacing.md),
+            Wrap(
+              spacing: 8.w,
+              runSpacing: 8.h,
+              children: [
+                _InfoChip(
+                  icon: Icons.route_rounded,
+                  label: '${controller.trips.length} trips',
+                ),
+                _InfoChip(
+                  icon: Icons.payments_rounded,
+                  label: '$paymentCount payments',
+                ),
+                _InfoChip(
+                  icon: Icons.receipt_rounded,
+                  label: '$expenseCount expenses',
+                ),
+                _InfoChip(
+                  icon: Icons.dataset_rounded,
+                  label: '$totalRecords records',
+                ),
+              ],
+            ),
+            SizedBox(height: AppSpacing.md),
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(12.w),
+              decoration: BoxDecoration(
+                color: AppColors.primarySurface,
+                borderRadius: AppRadius.md,
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.12),
                 ),
               ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Active Filter: ${controller.statementFilterLabel}',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.sm),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _showStatementFilterSheet(context),
+                          icon: const Icon(Icons.filter_alt_outlined),
+                          label: const Text('Set Time Filter'),
+                        ),
+                      ),
+                      if (controller.statementFilterType.value !=
+                          StatementTimeFilterType.all) ...[
+                        SizedBox(width: 8.w),
+                        TextButton(
+                          onPressed: controller.clearStatementFilter,
+                          child: const Text('Clear'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: AppSpacing.md),
+            SizedBox(
+              width: double.infinity,
+              child: AppButton(
+                text: 'Generate & Save PDF',
+                icon: Icons.download_rounded,
+                onPressed: canGenerate
+                    ? controller.onGenerateStatementPressed
+                    : null,
+              ),
+            ),
+            if (!canGenerate) ...[
               SizedBox(height: AppSpacing.sm),
-              SizedBox(
-                width: double.infinity,
-                child: AppButton(
-                  text: 'Generate & Save PDF',
-                  icon: Icons.download_rounded,
-                  onPressed: canGenerate
-                      ? controller.onGenerateStatementPressed
-                      : null,
+              Text(
+                controller.isLoading
+                    ? 'Please wait while company data is loading.'
+                    : 'Statement actions are temporarily unavailable.',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.neutral500,
                 ),
               ),
             ],
-          ),
-
-          if (!canGenerate) ...[
-            SizedBox(height: AppSpacing.sm),
-            Text(
-              controller.isLoading
-                  ? 'Please wait while company data is loading.'
-                  : 'Statement actions are temporarily unavailable.',
-              style: AppTextStyles.caption.copyWith(
-                color: AppColors.neutral500,
-              ),
-            ),
           ],
-        ],
-      ),
+        ),
+      );
+    });
+  }
+
+  Future<void> _showStatementFilterSheet(BuildContext context) async {
+    var tempType = controller.statementFilterType.value;
+    var tempSelectedMonth = controller.statementSelectedMonth.value;
+    var tempRangeStart = controller.statementRangeStart.value;
+    var tempRangeEnd = controller.statementRangeEnd.value;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 20.h),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Statement Time Filter',
+                      style: AppTextStyles.headlineSmall,
+                    ),
+                    SizedBox(height: AppSpacing.sm),
+                    RadioListTile<StatementTimeFilterType>(
+                      value: StatementTimeFilterType.all,
+                      groupValue: tempType,
+                      title: const Text('All Time'),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => tempType = value);
+                      },
+                    ),
+                    RadioListTile<StatementTimeFilterType>(
+                      value: StatementTimeFilterType.selectedMonth,
+                      groupValue: tempType,
+                      title: const Text('Selected Month'),
+                      subtitle: const Text('Pick a single month and year'),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => tempType = value);
+                      },
+                    ),
+                    if (tempType == StatementTimeFilterType.selectedMonth)
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            final picked = await _pickMonth(
+                              context,
+                              initialDate: tempSelectedMonth ?? DateTime.now(),
+                            );
+                            if (picked == null) return;
+                            setState(() => tempSelectedMonth = picked);
+                          },
+                          child: Text(
+                            tempSelectedMonth == null
+                                ? 'Select Month'
+                                : DateFormat(
+                                    'MMM yyyy',
+                                  ).format(tempSelectedMonth!),
+                          ),
+                        ),
+                      ),
+                    RadioListTile<StatementTimeFilterType>(
+                      value: StatementTimeFilterType.dateRange,
+                      groupValue: tempType,
+                      title: const Text('Custom Date Range'),
+                      subtitle: const Text(
+                        'Pick start and end date across wider years',
+                      ),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => tempType = value);
+                      },
+                    ),
+                    if (tempType == StatementTimeFilterType.dateRange)
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            final initialRange =
+                                (tempRangeStart != null && tempRangeEnd != null)
+                                ? DateTimeRange(
+                                    start: tempRangeStart!,
+                                    end: tempRangeEnd!,
+                                  )
+                                : null;
+
+                            final picked = await showDateRangePicker(
+                              context: context,
+                              firstDate: DateTime(1990, 1, 1),
+                              lastDate: DateTime(2100, 12, 31),
+                              initialDateRange: initialRange,
+                              builder: (context, child) {
+                                if (child == null) {
+                                  return const SizedBox.shrink();
+                                }
+
+                                return Center(
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 980,
+                                      maxHeight: 820,
+                                    ),
+                                    child: child,
+                                  ),
+                                );
+                              },
+                            );
+
+                            if (picked == null) return;
+                            setState(() {
+                              tempRangeStart = DateTime(
+                                picked.start.year,
+                                picked.start.month,
+                                picked.start.day,
+                              );
+                              tempRangeEnd = DateTime(
+                                picked.end.year,
+                                picked.end.month,
+                                picked.end.day,
+                              );
+                            });
+                          },
+                          child: Text(
+                            (tempRangeStart == null || tempRangeEnd == null)
+                                ? 'Pick Date Range'
+                                : '${DateFormat('dd MMM yyyy').format(tempRangeStart!)} - ${DateFormat('dd MMM yyyy').format(tempRangeEnd!)}',
+                          ),
+                        ),
+                      ),
+                    SizedBox(height: AppSpacing.md),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.of(sheetContext).pop(),
+                            child: const Text('Cancel'),
+                          ),
+                        ),
+                        SizedBox(width: 8.w),
+                        Expanded(
+                          child: AppButton(
+                            text: 'Apply',
+                            onPressed: () {
+                              if (tempType == StatementTimeFilterType.all) {
+                                controller.clearStatementFilter();
+                                Navigator.of(sheetContext).pop();
+                                return;
+                              }
+
+                              if (tempType ==
+                                  StatementTimeFilterType.selectedMonth) {
+                                if (tempSelectedMonth == null) {
+                                  Get.snackbar(
+                                    'Missing month',
+                                    'Please select a month.',
+                                  );
+                                  return;
+                                }
+                                controller.setStatementSelectedMonth(
+                                  tempSelectedMonth!,
+                                );
+                                Navigator.of(sheetContext).pop();
+                                return;
+                              }
+
+                              if (tempRangeStart == null ||
+                                  tempRangeEnd == null) {
+                                Get.snackbar(
+                                  'Missing range',
+                                  'Please select a valid date range.',
+                                );
+                                return;
+                              }
+
+                              controller.setStatementDateRange(
+                                DateTimeRange(
+                                  start: tempRangeStart!,
+                                  end: tempRangeEnd!,
+                                ),
+                              );
+                              Navigator.of(sheetContext).pop();
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<DateTime?> _pickMonth(
+    BuildContext context, {
+    required DateTime initialDate,
+  }) async {
+    final now = DateTime.now();
+    var selectedYear = initialDate.year;
+    if (selectedYear < 1990) selectedYear = 1990;
+    if (selectedYear > 2100) selectedYear = 2100;
+
+    const monthLabels = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    return showDialog<DateTime>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Select Month'),
+              content: SizedBox(
+                width: 440,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DropdownButtonFormField<int>(
+                      value: selectedYear,
+                      decoration: const InputDecoration(labelText: 'Year'),
+                      items: [
+                        for (int year = 1990; year <= 2100; year++)
+                          DropdownMenuItem<int>(
+                            value: year,
+                            child: Text(year.toString()),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => selectedYear = value);
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8.w,
+                      runSpacing: 8.h,
+                      children: [
+                        for (int i = 0; i < monthLabels.length; i++)
+                          SizedBox(
+                            width: 98,
+                            child: OutlinedButton(
+                              onPressed: () {
+                                Navigator.of(
+                                  dialogContext,
+                                ).pop(DateTime(selectedYear, i + 1, 1));
+                              },
+                              child: Text(
+                                monthLabels[i],
+                                style: TextStyle(fontSize: 16),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Tip: tap a month to apply it for $selectedYear.',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.neutral500,
+                      ),
+                    ),
+                    if (selectedYear == now.year) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Current year selected.',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.neutral400,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -486,13 +789,15 @@ class _FundSummaryCard extends StatelessWidget {
   const _FundSummaryCard({
     required this.totalAmountBilled,
     required this.totalAmountReceived,
-    required this.totalAmountExpenses,
+    required this.totalAmountCompanyAddedExpenses,
+    required this.totalAmountMainBalanceExpenses,
     required this.totalAmountDue,
   });
 
   final double totalAmountBilled;
   final double totalAmountReceived;
-  final double totalAmountExpenses;
+  final double totalAmountCompanyAddedExpenses;
+  final double totalAmountMainBalanceExpenses;
   final double totalAmountDue;
 
   @override
@@ -545,13 +850,27 @@ class _FundSummaryCard extends StatelessWidget {
               ),
               SizedBox(height: AppSpacing.sm),
               _HighlightItem(
-                label: 'Expenses',
-                value: '৳ ${_formatAmount(totalAmountExpenses)}',
+                label: 'Expenses (Added To Due)',
+                value: '৳ ${_formatAmount(totalAmountCompanyAddedExpenses)}',
               ),
               SizedBox(height: AppSpacing.sm),
               _HighlightItem(
-                label: 'Due',
+                label: 'Due (Total)',
                 value: '৳ ${_formatAmount(totalAmountDue)}',
+              ),
+              SizedBox(height: AppSpacing.sm),
+              _HighlightItem(
+                label: 'Expenses (Main Balance)',
+                value: '৳ ${_formatAmount(totalAmountMainBalanceExpenses)}',
+              ),
+              SizedBox(height: AppSpacing.sm),
+
+              Text(
+                'Main balance expenses are shown for fund tracking only and are not included in Due.',
+                style: AppTextStyles.caption.copyWith(
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ],
           ),
@@ -1074,6 +1393,7 @@ double _toDouble(String value) {
 }
 
 String _formatAmount(double value) {
+  return value.toInt().toString();
   if (value >= 1e7) {
     return '${(value / 1e7).toStringAsFixed(2)} Cr';
   }
