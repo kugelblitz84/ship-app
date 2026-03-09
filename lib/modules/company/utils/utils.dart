@@ -424,6 +424,7 @@ class CompanyStatementUtil {
           _cell('ID', header: true),
           _cell('Date', header: true),
           _cell('Description', header: true),
+          _cell('Product', header: true),
           _cell('Debit (+)', header: true, right: true),
           _cell('Credit (-)', header: true, right: true),
           _cell('Balance', header: true, right: true),
@@ -438,6 +439,7 @@ class CompanyStatementUtil {
             _cell(''),
             _cell(''),
             _cell('No ledger entries found.'),
+            _cell(''),
             _cell('', right: true),
             _cell('', right: true),
             _cell(_currency(ledger.closingBalance), right: true),
@@ -453,6 +455,7 @@ class CompanyStatementUtil {
             _cell(entry.id.toString()),
             _cell(entry.displayDate),
             _cell(entry.description),
+            _cell(entry.product),
             _cell(entry.debit > 0 ? _currency(entry.debit) : '', right: true),
             _cell(entry.credit > 0 ? _currency(entry.credit) : '', right: true),
             _cell(_currency(entry.balance), right: true),
@@ -468,6 +471,7 @@ class CompanyStatementUtil {
           _cell('', color: PdfColors.white),
           _cell('', color: PdfColors.white),
           _cell('Closing Balance', color: PdfColors.white, bold: true),
+          _cell('', color: PdfColors.white),
           _cell('', right: true, color: PdfColors.white),
           _cell('', right: true, color: PdfColors.white),
           _cell(
@@ -484,11 +488,12 @@ class CompanyStatementUtil {
       border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
       columnWidths: {
         0: const pw.FlexColumnWidth(0.75),
-        1: const pw.FlexColumnWidth(1.4),
-        2: const pw.FlexColumnWidth(4.2),
-        3: const pw.FlexColumnWidth(1.55),
-        4: const pw.FlexColumnWidth(1.55),
-        5: const pw.FlexColumnWidth(1.6),
+        1: const pw.FlexColumnWidth(1.35),
+        2: const pw.FlexColumnWidth(2.8),
+        3: const pw.FlexColumnWidth(2.2),
+        4: const pw.FlexColumnWidth(1.45),
+        5: const pw.FlexColumnWidth(1.45),
+        6: const pw.FlexColumnWidth(1.5),
       },
       children: rows,
     );
@@ -571,10 +576,12 @@ class CompanyStatementUtil {
     final items = <_LedgerRawItem>[];
 
     for (final trip in trips) {
+      final productName = (trip.product?.productName ?? '').trim();
       items.add(
         _LedgerRawItem(
           dateRaw: trip.date,
           description: _tripDescription(trip),
+          product: productName.isEmpty ? '-' : _pdfText(productName),
           debit: 0,
           credit: _parseAmount(trip.totalBill),
           kindOrder: 0,
@@ -592,6 +599,7 @@ class CompanyStatementUtil {
           _LedgerRawItem(
             dateRaw: tx.date,
             description: _dueExpenseDescription(tx),
+            product: _txProductOrDescription(tx),
             debit: 0,
             credit: _parseAmount(tx.amount),
             kindOrder: 0,
@@ -604,6 +612,7 @@ class CompanyStatementUtil {
         _LedgerRawItem(
           dateRaw: tx.date,
           description: _paymentDescription(tx),
+          product: _txProductOrDescription(tx),
           debit: _parseAmount(tx.amount),
           credit: 0,
           kindOrder: 1,
@@ -646,6 +655,7 @@ class CompanyStatementUtil {
           id: id,
           displayDate: item.displayDate,
           description: item.description,
+          product: item.product,
           debit: item.debit,
           credit: item.credit,
           balance: runningBalance,
@@ -665,33 +675,39 @@ class CompanyStatementUtil {
     final from = _safe(trip.from);
     final to = _safe(trip.to);
     final company = _safe(trip.companyAndShipInfo.companyName);
-    final product = (trip.product?.productName ?? '').trim();
-    final productPart = product.isEmpty
-        ? ''
-        : ' | Product: ${_pdfText(product)}';
-    return _pdfText('Trip bill: $from - $to | Company: $company$productPart');
+    return _pdfText('Trip bill: $from - $to | Company: $company');
   }
 
   static String _paymentDescription(tx_models.TransactionModel tx) {
     final method = _formatType(tx.type);
     final company = _safe(tx.companyAndShipInfo.companyName ?? 'N/A');
-    final base = tx.hasTrip ? _pdfText(tx.routeLabel) : '';
-    final desc = (tx.description ?? '').trim();
-    final label = desc.isNotEmpty
-        ? _pdfText(desc)
-        : (base.isNotEmpty ? base : 'Payment entry');
-    return _pdfText('Payment ($method): $label | Company: $company');
+    final route = tx.hasTrip ? _pdfText(tx.routeLabel) : '';
+    final routePart = route.isNotEmpty ? ' | Route: $route' : '';
+    return _pdfText('Payment ($method)$routePart | Company: $company');
   }
 
   static String _dueExpenseDescription(tx_models.TransactionModel tx) {
     final company = _safe(tx.companyAndShipInfo.companyName ?? 'N/A');
     final source = _formatType(tx.expenseSource);
-    final base = tx.hasTrip ? _pdfText(tx.routeLabel) : '';
+    final route = tx.hasTrip ? _pdfText(tx.routeLabel) : '';
+    final routePart = route.isNotEmpty ? ' | Route: $route' : '';
+    return _pdfText('Due Expense ($source)$routePart | Company: $company');
+  }
+
+  static String _txProductOrDescription(tx_models.TransactionModel tx) {
     final desc = (tx.description ?? '').trim();
-    final label = desc.isNotEmpty
-        ? _pdfText(desc)
-        : (base.isNotEmpty ? base : 'Expense entry');
-    return _pdfText('Due Expense ($source): $label | Company: $company');
+    if (desc.isNotEmpty) {
+      return _pdfText(desc);
+    }
+
+    if (tx.hasTrip) {
+      final route = _pdfText(tx.routeLabel);
+      if (route.isNotEmpty) {
+        return route;
+      }
+    }
+
+    return '-';
   }
 
   static pw.Widget _metaText(String label, String value) {
@@ -1198,6 +1214,12 @@ class CompanyStatementPreviewPage extends StatelessWidget {
             children: [
               Expanded(
                 child: _miniValue(
+                  'Product',
+                  entry.product.isEmpty ? '-' : entry.product,
+                ),
+              ),
+              Expanded(
+                child: _miniValue(
                   'Debit',
                   entry.debit > 0
                       ? CompanyStatementUtil._currency(entry.debit)
@@ -1253,6 +1275,7 @@ class _LedgerRawItem {
   _LedgerRawItem({
     required this.dateRaw,
     required this.description,
+    required this.product,
     required this.debit,
     required this.credit,
     required this.kindOrder,
@@ -1261,6 +1284,7 @@ class _LedgerRawItem {
 
   final String dateRaw;
   final String description;
+  final String product;
   final double debit;
   final double credit;
   final int kindOrder;
@@ -1297,6 +1321,7 @@ class _LedgerEntry {
     required this.id,
     required this.displayDate,
     required this.description,
+    required this.product,
     required this.debit,
     required this.credit,
     required this.balance,
@@ -1305,6 +1330,7 @@ class _LedgerEntry {
   final int id;
   final String displayDate;
   final String description;
+  final String product;
   final double debit;
   final double credit;
   final double balance;
