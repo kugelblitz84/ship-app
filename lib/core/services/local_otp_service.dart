@@ -1,4 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
@@ -30,13 +31,19 @@ class LocalOtpService extends GetxService {
     : _storage = storage ?? const FlutterSecureStorage();
 
   Future<void> issueOtp({required String email}) async {
+    if (kIsWeb) {
+      throw UnsupportedError(
+        'SMTP OTP sending is not supported on Flutter Web. Use a backend endpoint or Firebase email verification instead.',
+      );
+    }
+
     final otp = Util.generateOtp();
     final expiresAt = DateTime.now()
         .add(const Duration(minutes: _otpTtlMinutes))
         .millisecondsSinceEpoch;
 
-    await _persistOtp(email: email, otp: otp, expiresAt: expiresAt);
     await _sendOtpEmail(email: email, otp: otp);
+    await _persistOtp(email: email, otp: otp, expiresAt: expiresAt);
   }
 
   Future<OtpValidationResult> verifyOtp({

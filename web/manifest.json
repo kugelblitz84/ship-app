@@ -1,6 +1,6 @@
 {
-    "name": "urgent",
-    "short_name": "urgent",
+    "name": "MarineLedger",
+    "short_name": "MarineLedger",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

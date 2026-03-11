@@ -8,6 +8,8 @@ import '../../../../core/services/firestore_services/companydata_service.dart';
 import '../../../../core/services/firestore_services/shipdata_service.dart';
 import '../../../../core/services/firestore_services/transactiondata_service.dart';
 import '../../../../core/themes/themes.dart';
+import '../../../../core/widgets/widgets.dart';
+import '../../../home/home_controller.dart';
 import '../../../company/models/company_model.dart';
 import '../../../ship/models/ship_model.dart';
 
@@ -157,6 +159,32 @@ class AddExpensesTransactionController extends GetxController {
     }
   }
 
+  Future<void> onDeleteTransactionMethodPressed(
+    BuildContext context,
+    String method,
+  ) async {
+    final deleted = await showPasswordConfirmDeletionDialog(
+      context: context,
+      title: 'Delete Transaction Method',
+      message: 'Enter your password to delete "$method".',
+      onConfirm: (password) => deleteTransactionMethodWithPassword(
+        method: method,
+        password: password,
+      ),
+    );
+
+    if (!deleted) return;
+
+    Get.snackbar(
+      'Method Deleted',
+      'Transaction method deleted successfully.',
+      snackPosition: SnackPosition.TOP,
+      backgroundColor: AppColors.successLight,
+      colorText: AppColors.success,
+      icon: const Icon(Icons.check_circle_rounded, color: AppColors.success),
+    );
+  }
+
   FormFieldValidator<String> requiredValidator(String fieldLabel) {
     return (value) {
       if (value == null || value.trim().isEmpty) {
@@ -186,9 +214,7 @@ class AddExpensesTransactionController extends GetxController {
   }
 
   String? shipValidator(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Ship is required';
-    }
+    // Ship is optional for expenses.
     return null;
   }
 
@@ -314,10 +340,6 @@ class AddExpensesTransactionController extends GetxController {
       Get.snackbar('Error', 'Please select a company');
       return;
     }
-    if (selectedShip == null) {
-      Get.snackbar('Error', 'Please select a ship');
-      return;
-    }
     if ((selectedType.value ?? '').trim().isEmpty) {
       Get.snackbar('Error', 'Please select a transaction type');
       return;
@@ -339,14 +361,14 @@ class AddExpensesTransactionController extends GetxController {
         expenseSource: selectedExpenseSource.value,
         companyAndShipInfo: CompanyAndShipInfo(
           companyName: isCompanySource ? company!.name : '',
-          shipName: selectedShip!.name,
+          shipName: selectedShip?.name ?? '',
         ),
         description: descriptionController.text.trim(),
         amount: amountController.text.trim(),
         totalPrice: company?.totalAmountBilled ?? '0',
         amountDue: isCompanySource
-            ? _formatAmount(companyDue + expenseAmount)
-          : _formatAmount(currentMainBalance - expenseAmount),
+            ? _formatAmount(companyDue - expenseAmount)
+            : _formatAmount(currentMainBalance - expenseAmount),
         date: dateController.text.trim(),
         type: selectedType.value!.trim(),
       );
@@ -363,11 +385,14 @@ class AddExpensesTransactionController extends GetxController {
       await loadCompanies();
       await loadShips();
       await loadTransactions();
+      if (Get.isRegistered<HomeController>()) {
+        await Get.find<HomeController>().loadHomeData();
+      }
       Get.back();
       Get.snackbar(
         'Expense Added',
         sourceAtSubmit == 'company'
-            ? 'Expense added to the selected company due amount.'
+            ? 'Expense deducted from the selected company due amount.'
             : 'Expense deducted from main balance successfully.',
         snackPosition: SnackPosition.TOP,
         backgroundColor: AppColors.successLight,
@@ -426,7 +451,7 @@ class AddExpensesTransactionController extends GetxController {
     final enteredAmount = _toDouble(amountController.text);
 
     final updatedReceived = received;
-    final updatedDue = due + enteredAmount;
+    final updatedDue = due - enteredAmount;
 
     currentReceivedDisplay.value = _formatAmount(updatedReceived);
     currentDueDisplay.value = _formatAmount(updatedDue.toDouble());

@@ -214,8 +214,8 @@ class InvoiceUtil {
   static Future<Uint8List> buildInvoicePdf(TransactionModel transaction) async {
     final pdf = pw.Document(
       title: 'Invoice',
-      author: 'Urgent',
-      creator: 'Urgent App',
+      author: 'MarineLedger',
+      creator: 'MarineLedger App',
       subject: 'Transaction invoice',
     );
 
@@ -306,7 +306,7 @@ class InvoiceUtil {
               ),
               pw.SizedBox(height: 6),
               pw.Text(
-                'Urgent Transport Billing',
+                'MarineLedger Transport Billing',
                 style: const pw.TextStyle(color: PdfColors.white, fontSize: 10),
               ),
             ],
@@ -355,6 +355,18 @@ class InvoiceUtil {
   }
 
   static pw.Widget _buildPaymentMetaRow(TransactionModel transaction) {
+    final category = transaction.transactionType.trim().toLowerCase();
+    final metaTitle = category == 'expenses'
+        ? 'Expense Source'
+        : category == 'trips'
+        ? 'Record Type'
+        : 'Payment Method';
+    final metaValue = category == 'expenses'
+        ? _formatExpenseSource(transaction.expenseSource)
+        : category == 'trips'
+        ? 'Trip Entry'
+        : _formatType(transaction.type);
+
     return pw.Row(
       children: [
         pw.Expanded(
@@ -365,20 +377,11 @@ class InvoiceUtil {
         ),
         pw.SizedBox(width: 10),
         pw.Expanded(
-          child: _pill(
-            title:
-                transaction.transactionType.trim().toLowerCase() == 'expenses'
-                ? 'Expense Source'
-                : 'Payment Method',
-            value:
-                transaction.transactionType.trim().toLowerCase() == 'expenses'
-                ? _formatExpenseSource(transaction.expenseSource)
-                : _formatType(transaction.type),
-          ),
+          child: _pill(title: metaTitle, value: metaValue),
         ),
         pw.SizedBox(width: 10),
         pw.Expanded(
-          child: _pill(title: 'Source', value: 'Urgent App'),
+          child: _pill(title: 'Source', value: 'MarineLedger App'),
         ),
       ],
     );
@@ -388,6 +391,13 @@ class InvoiceUtil {
     required TransactionModel transaction,
     required String amountFormatted,
   }) {
+    final category = transaction.transactionType.trim().toLowerCase();
+    final itemDescription = category == 'expenses'
+        ? 'Transport expense (${_formatExpenseSource(transaction.expenseSource)}) for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)}'
+        : category == 'trips'
+        ? 'Trip entry for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)}'
+        : 'Transport payment for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)} (${_formatType(transaction.type)})';
+
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
       columnWidths: {
@@ -409,11 +419,7 @@ class InvoiceUtil {
         pw.TableRow(
           children: [
             _tableCell('1'),
-            _tableCell(
-              transaction.transactionType.trim().toLowerCase() == 'expenses'
-                  ? 'Transport expense (${_formatExpenseSource(transaction.expenseSource)}) for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)}'
-                  : 'Transport payment for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)} (${_formatType(transaction.type)})',
-            ),
+            _tableCell(itemDescription),
             _tableCell('1'),
             _tableCell(amountFormatted, alignRight: true),
           ],
@@ -474,7 +480,7 @@ class InvoiceUtil {
           pw.SizedBox(height: 6),
           pw.Text(
             description.isEmpty
-                ? 'This invoice is generated from transaction records in the Urgent app.'
+                ? 'This invoice is generated from transaction records in the MarineLedger app.'
                 : description,
             style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
           ),
@@ -669,6 +675,9 @@ class InvoiceUtil {
     if (normalized == 'expenses') {
       return 'Expenses';
     }
+    if (normalized == 'trips') {
+      return 'Trip';
+    }
     return 'Payment';
   }
 
@@ -678,7 +687,7 @@ class InvoiceUtil {
       return 'From Main Balance';
     }
     if (normalized == 'company') {
-      return 'Added to Due';
+      return 'Deducted from Due';
     }
     if (normalized.isEmpty) {
       return 'N/A';
@@ -738,6 +747,7 @@ class InvoicePreviewPage extends StatelessWidget {
   String _formatTransactionCategory(String transactionType) {
     final normalized = transactionType.trim().toLowerCase();
     if (normalized == 'expenses') return 'Expenses';
+    if (normalized == 'trips') return 'Trip';
     return 'Payment';
   }
 
@@ -747,7 +757,7 @@ class InvoicePreviewPage extends StatelessWidget {
       return 'From Main Balance';
     }
     if (normalized == 'company') {
-      return 'Added to Due';
+      return 'Deducted from Due';
     }
     if (normalized.isEmpty) {
       return 'N/A';
@@ -831,7 +841,7 @@ class InvoicePreviewPage extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           const Text(
-                            'Urgent Transport Billing',
+                            'MarineLedger Transport Billing',
                             style: TextStyle(
                               color: Colors.white70,
                               fontSize: 11,
@@ -900,18 +910,34 @@ class InvoicePreviewPage extends StatelessWidget {
                 Expanded(
                   child: _pill(
                     context,
-                    transaction.transactionType.trim().toLowerCase() ==
-                            'expenses'
-                        ? 'Expense Source'
-                        : 'Payment Method',
-                    transaction.transactionType.trim().toLowerCase() ==
-                            'expenses'
-                        ? _formatExpenseSource(transaction.expenseSource)
-                        : _formatType(transaction.type),
+                    () {
+                      final category = transaction.transactionType
+                          .trim()
+                          .toLowerCase();
+                      if (category == 'expenses') {
+                        return 'Expense Source';
+                      }
+                      if (category == 'trips') {
+                        return 'Record Type';
+                      }
+                      return 'Payment Method';
+                    }(),
+                    () {
+                      final category = transaction.transactionType
+                          .trim()
+                          .toLowerCase();
+                      if (category == 'expenses') {
+                        return _formatExpenseSource(transaction.expenseSource);
+                      }
+                      if (category == 'trips') {
+                        return 'Trip Entry';
+                      }
+                      return _formatType(transaction.type);
+                    }(),
                   ),
                 ),
                 const SizedBox(width: 10),
-                Expanded(child: _pill(context, 'Source', 'Urgent App')),
+                Expanded(child: _pill(context, 'Source', 'MarineLedger App')),
               ],
             ),
             const SizedBox(height: 16),
@@ -938,12 +964,18 @@ class InvoicePreviewPage extends StatelessWidget {
                 TableRow(
                   children: [
                     _tableCell('1'),
-                    _tableCell(
-                      transaction.transactionType.trim().toLowerCase() ==
-                              'expenses'
-                          ? 'Transport expense (${_formatExpenseSource(transaction.expenseSource)}) for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)}'
-                          : 'Transport payment for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)} (${_formatType(transaction.type)})',
-                    ),
+                    _tableCell(() {
+                      final category = transaction.transactionType
+                          .trim()
+                          .toLowerCase();
+                      if (category == 'expenses') {
+                        return 'Transport expense (${_formatExpenseSource(transaction.expenseSource)}) for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)}';
+                      }
+                      if (category == 'trips') {
+                        return 'Trip entry for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)}';
+                      }
+                      return 'Transport payment for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)} (${_formatType(transaction.type)})';
+                    }()),
                     _tableCell('1'),
                     _tableCell(_currency(amount), alignRight: true),
                   ],
@@ -999,7 +1031,7 @@ class InvoicePreviewPage extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     (transaction.description ?? '').trim().isEmpty
-                        ? 'This invoice is generated from transaction records in the Urgent app.'
+                        ? 'This invoice is generated from transaction records in the MarineLedger app.'
                         : transaction.description!.trim(),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: Colors.grey.shade700,

@@ -42,7 +42,7 @@ class HomeView extends GetView<HomeController> {
                   SliverToBoxAdapter(
                     child: isLoading
                         ? _buildLoadingState(layout)
-                        : _buildDashboardContent(layout),
+                        : _buildDashboardContent(context, layout),
                   ),
                 ],
               ),
@@ -324,18 +324,18 @@ class HomeView extends GetView<HomeController> {
   // ═══════════════════════════════════════════════════════════════════════
   // DASHBOARD CONTENT
   // ═══════════════════════════════════════════════════════════════════════
-  Widget _buildDashboardContent(_HomeLayoutSize layout) {
+  Widget _buildDashboardContent(BuildContext context, _HomeLayoutSize layout) {
     switch (layout) {
       case _HomeLayoutSize.mobile:
-        return _buildMobileDashboardContent();
+        return _buildMobileDashboardContent(context);
       case _HomeLayoutSize.tablet:
-        return _buildTabletDashboardContent();
+        return _buildTabletDashboardContent(context);
       case _HomeLayoutSize.desktop:
-        return _buildDesktopDashboardContent();
+        return _buildDesktopDashboardContent(context);
     }
   }
 
-  Widget _buildMobileDashboardContent() {
+  Widget _buildMobileDashboardContent(BuildContext context) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 20.w),
       child: Column(
@@ -378,7 +378,7 @@ class HomeView extends GetView<HomeController> {
             () => Get.toNamed(AppRoutes.transactionHistory),
           ),
           SizedBox(height: 12.h),
-          _buildRecentTransactions(),
+          _buildRecentTransactions(context),
 
           SizedBox(height: 32.h),
         ],
@@ -386,7 +386,7 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  Widget _buildTabletDashboardContent() {
+  Widget _buildTabletDashboardContent(BuildContext context) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 24.w),
       child: Column(
@@ -429,7 +429,7 @@ class HomeView extends GetView<HomeController> {
                       () => Get.toNamed(AppRoutes.transactionHistory),
                     ),
                     SizedBox(height: 12.h),
-                    _buildRecentTransactions(),
+                    _buildRecentTransactions(context),
                   ],
                 ),
               ),
@@ -441,7 +441,7 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  Widget _buildDesktopDashboardContent() {
+  Widget _buildDesktopDashboardContent(BuildContext context) {
     return Center(
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: 1280.w),
@@ -487,7 +487,7 @@ class HomeView extends GetView<HomeController> {
                           () => Get.toNamed(AppRoutes.transactionHistory),
                         ),
                         SizedBox(height: 12.h),
-                        _buildRecentTransactions(),
+                        _buildRecentTransactions(context),
                       ],
                     ),
                   ),
@@ -1228,7 +1228,7 @@ class HomeView extends GetView<HomeController> {
   // ═══════════════════════════════════════════════════════════════════════
   // RECENT TRANSACTIONS
   // ═══════════════════════════════════════════════════════════════════════
-  Widget _buildRecentTransactions() {
+  Widget _buildRecentTransactions(BuildContext context) {
     final transactions = controller.recentTransactions;
 
     if (transactions.isEmpty) {
@@ -1249,7 +1249,13 @@ class HomeView extends GetView<HomeController> {
       child: Column(
         children: [
           for (int i = 0; i < transactions.length; i++) ...[
-            _buildTransactionTile(transactions[i]),
+            _buildTransactionTile(
+              transactions[i],
+              onDelete: () => controller.onDeleteTransactionPressed(
+                context,
+                transactions[i],
+              ),
+            ),
             if (i < transactions.length - 1)
               Divider(
                 height: 1,
@@ -1263,7 +1269,7 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  Widget _buildTransactionTile(TransactionModel tx) {
+  Widget _buildTransactionTile(TransactionModel tx, {VoidCallback? onDelete}) {
     final typeIcon = _getTransactionTypeIcon(tx.type);
     final typeColor = _getTransactionTypeColor(tx.type);
 
@@ -1299,8 +1305,8 @@ class HomeView extends GetView<HomeController> {
                   SizedBox(height: 2.h),
                   Text(
                     tx.isExpense
-                        ? '${tx.routeLabel} • ${tx.date} • ${tx.transactionTypeLabel} • ${tx.expenseSourceLabel}'
-                        : '${tx.routeLabel} • ${tx.date} • ${tx.transactionTypeLabel}',
+                        ? '${tx.paymentMethodLabel} • ${tx.date} • ${tx.transactionTypeLabel} • ${tx.expenseSourceLabel}'
+                        : '${tx.paymentMethodLabel} • ${tx.date} • ${tx.transactionTypeLabel}',
                     style: AppTextStyles.caption,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1328,6 +1334,16 @@ class HomeView extends GetView<HomeController> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                if (onDelete != null)
+                  IconButton(
+                    tooltip: 'Delete transaction',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: onDelete,
+                    icon: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: AppColors.error,
+                    ),
+                  ),
               ],
             ),
           ],
@@ -1423,21 +1439,23 @@ class HomeView extends GetView<HomeController> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 52.w,
-                    height: 52.w,
+                    width: 58.w,
+                    height: 58.w,
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: AppRadius.md,
                     ),
-                    child: Icon(
-                      Icons.rocket_launch_rounded,
-                      size: 26.sp,
-                      color: Colors.white,
+                    child: Padding(
+                      padding: const EdgeInsets.all(2.0),
+                      child: Image.asset(
+                        'assets/logo/master_logo.png',
+                        fit: BoxFit.contain,
+                      ),
                     ),
                   ),
                   SizedBox(height: 12.h),
                   Text(
-                    'Urgent',
+                    'MarineLedger',
                     style: AppTextStyles.headlineMedium.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
@@ -1466,6 +1484,15 @@ class HomeView extends GetView<HomeController> {
                       'Dashboard',
                       true,
                       () => Get.back(),
+                    ),
+                    _buildDrawerItem(
+                      Icons.manage_accounts_rounded,
+                      'Edit Profile',
+                      false,
+                      () {
+                        Get.back();
+                        Get.toNamed(AppRoutes.profileEdit);
+                      },
                     ),
                     _buildDrawerItem(
                       Icons.directions_boat_rounded,
@@ -1672,6 +1699,8 @@ class HomeView extends GetView<HomeController> {
         return Icons.smartphone_rounded;
       case 'other':
         return Icons.more_horiz_rounded;
+      case 'trip':
+        return Icons.alt_route_rounded;
       default:
         return Icons.payment_rounded;
     }
@@ -1689,6 +1718,8 @@ class HomeView extends GetView<HomeController> {
         return AppColors.accent;
       case 'other':
         return AppColors.neutral600;
+      case 'trip':
+        return AppColors.primary;
       default:
         return AppColors.neutral500;
     }
@@ -1706,6 +1737,8 @@ class HomeView extends GetView<HomeController> {
         return 'NAGAD';
       case 'other':
         return 'OTHER';
+      case 'trip':
+        return 'TRIP';
       default:
         return type.toUpperCase();
     }

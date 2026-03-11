@@ -36,7 +36,7 @@ class CompanyDetailsView extends GetView<CompanyDetailsController> {
               TextButton.icon(
                 onPressed: busy
                     ? null
-                    : () => _showDeleteCompanyDialog(context),
+                    : () => controller.onDeleteCompanyPressed(context),
                 icon: Icon(
                   Icons.delete_outline_rounded,
                   size: 18.sp,
@@ -156,14 +156,33 @@ class CompanyDetailsView extends GetView<CompanyDetailsController> {
                         message: 'No trips for this company yet.',
                       ),
                     ]
-                  : controller.trips
-                        .map(
-                          (trip) => _TripTile(
-                            trip: trip,
-                            onTap: () => controller.openTripDetails(trip),
+                  : [
+                      SizedBox(
+                        height: _listViewportHeight(
+                          listLength: controller.visibleTrips.length,
+                          itemHeight: 96.h,
+                        ),
+                        child: Scrollbar(
+                          controller: controller.tripsScrollController,
+                          thumbVisibility: controller.visibleTrips.length > 5,
+                          child: ListView.builder(
+                            controller: controller.tripsScrollController,
+                            itemCount: controller.visibleTrips.length,
+                            itemBuilder: (context, index) {
+                              final trip = controller.visibleTrips[index];
+                              return _TripTile(
+                                trip: trip,
+                                onTap: () => controller.openTripDetails(trip),
+                              );
+                            },
                           ),
-                        )
-                        .toList(),
+                        ),
+                      ),
+                      if (controller.isLoadingMoreTrips) ...[
+                        SizedBox(height: AppSpacing.sm),
+                        const Center(child: CircularProgressIndicator()),
+                      ],
+                    ],
             ),
             SizedBox(height: AppSpacing.base),
 
@@ -179,15 +198,42 @@ class CompanyDetailsView extends GetView<CompanyDetailsController> {
                             'No transactions received from this company yet.',
                       ),
                     ]
-                  : controller.transactions
-                        .map(
-                          (transaction) => _TransactionTile(
-                            transaction: transaction,
-                            onTap: () =>
-                                controller.openTransactionDetails(transaction),
+                  : [
+                      SizedBox(
+                        height: _listViewportHeight(
+                          listLength: controller.visibleTransactions.length,
+                          itemHeight: 112.h,
+                        ),
+                        child: Scrollbar(
+                          controller: controller.transactionsScrollController,
+                          thumbVisibility:
+                              controller.visibleTransactions.length > 5,
+                          child: ListView.builder(
+                            controller: controller.transactionsScrollController,
+                            itemCount: controller.visibleTransactions.length,
+                            itemBuilder: (context, index) {
+                              final transaction =
+                                  controller.visibleTransactions[index];
+                              return _TransactionTile(
+                                transaction: transaction,
+                                onTap: () => controller.openTransactionDetails(
+                                  transaction,
+                                ),
+                                onDelete: () =>
+                                    controller.onDeleteTransactionPressed(
+                                      context,
+                                      transaction,
+                                    ),
+                              );
+                            },
                           ),
-                        )
-                        .toList(),
+                        ),
+                      ),
+                      if (controller.isLoadingMoreTransactions) ...[
+                        SizedBox(height: AppSpacing.sm),
+                        const Center(child: CircularProgressIndicator()),
+                      ],
+                    ],
             ),
             SizedBox(height: AppSpacing.base),
             _StatementActionsCard(controller: controller),
@@ -196,83 +242,6 @@ class CompanyDetailsView extends GetView<CompanyDetailsController> {
         );
       }),
     );
-  }
-
-  Future<void> _showDeleteCompanyDialog(BuildContext context) async {
-    final passwordController = TextEditingController();
-    var isSubmitting = false;
-    final dialogMaxWidth = Get.width.clamp(320.0, 560.0);
-
-    final deleted = await Get.dialog<bool>(
-      StatefulBuilder(
-        builder: (dialogContext, setState) {
-          return AlertDialog(
-            title: const Text('Delete Company'),
-            content: SizedBox(
-              width: dialogMaxWidth,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Enter your password to confirm deletion.'),
-                    SizedBox(height: AppSpacing.base),
-                    TextField(
-                      controller: passwordController,
-                      obscureText: true,
-                      enabled: !isSubmitting,
-                      decoration: const InputDecoration(
-                        hintText: 'Password',
-                        prefixIcon: Icon(Icons.lock_outline_rounded),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: isSubmitting
-                    ? null
-                    : () {
-                        if (Get.isDialogOpen ?? false) Get.back(result: false);
-                      },
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: isSubmitting
-                    ? null
-                    : () async {
-                        setState(() => isSubmitting = true);
-                        final isDeleted = await controller
-                            .deleteCompanyWithPassword(passwordController.text);
-                        if (!isDeleted) {
-                          if (Get.isDialogOpen ?? false) {
-                            setState(() => isSubmitting = false);
-                          }
-                          return;
-                        }
-                        if (Get.isDialogOpen ?? false) Get.back(result: true);
-                      },
-                child: isSubmitting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Delete'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    passwordController.dispose();
-
-    if (deleted == true) {
-      Get.back(result: true);
-    }
   }
 }
 
@@ -301,7 +270,14 @@ class _StatementActionsCard extends StatelessWidget {
             (item) => item.transactionType.trim().toLowerCase() == 'expenses',
           )
           .length;
-      final paymentCount = controller.transactions.length - expenseCount;
+      final paymentCount = controller.transactions
+          .where(
+            (item) => item.transactionType.trim().toLowerCase() == 'payment',
+          )
+          .length;
+      final tripTransactionCount = controller.transactions
+          .where((item) => item.transactionType.trim().toLowerCase() == 'trips')
+          .length;
 
       return Container(
         padding: EdgeInsets.all(18.w),
@@ -362,6 +338,10 @@ class _StatementActionsCard extends StatelessWidget {
                 _InfoChip(
                   icon: Icons.receipt_rounded,
                   label: '$expenseCount expenses',
+                ),
+                _InfoChip(
+                  icon: Icons.alt_route_rounded,
+                  label: '$tripTransactionCount trip txns',
                 ),
                 _InfoChip(
                   icon: Icons.dataset_rounded,
@@ -850,7 +830,7 @@ class _FundSummaryCard extends StatelessWidget {
               ),
               SizedBox(height: AppSpacing.sm),
               _HighlightItem(
-                label: 'Expenses (Added To Due)',
+                label: 'Expenses (Deducted From Due)',
                 value: '৳ ${_formatAmount(totalAmountCompanyAddedExpenses)}',
               ),
               SizedBox(height: AppSpacing.sm),
@@ -859,19 +839,19 @@ class _FundSummaryCard extends StatelessWidget {
                 value: '৳ ${_formatAmount(totalAmountDue)}',
               ),
               SizedBox(height: AppSpacing.sm),
-              _HighlightItem(
-                label: 'Expenses (Main Balance)',
-                value: '৳ ${_formatAmount(totalAmountMainBalanceExpenses)}',
-              ),
-              SizedBox(height: AppSpacing.sm),
+              // _HighlightItem(
+              //   label: 'Expenses (Main Balance)',
+              //   value: '৳ ${_formatAmount(totalAmountMainBalanceExpenses)}',
+              // ),
+              // SizedBox(height: AppSpacing.sm),
 
-              Text(
-                'Main balance expenses are shown for fund tracking only and are not included in Due.',
-                style: AppTextStyles.caption.copyWith(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              // Text(
+              //   'Main balance expenses are shown for fund tracking only and are not included in Due.',
+              //   style: AppTextStyles.caption.copyWith(
+              //     color: Colors.white.withValues(alpha: 0.7),
+              //     fontWeight: FontWeight.w500,
+              //   ),
+              // ),
             ],
           ),
         ],
@@ -1146,10 +1126,15 @@ class _TripTile extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _TransactionTile extends StatelessWidget {
-  const _TransactionTile({required this.transaction, required this.onTap});
+  const _TransactionTile({
+    required this.transaction,
+    required this.onTap,
+    this.onDelete,
+  });
 
   final TransactionModel transaction;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1190,7 +1175,7 @@ class _TransactionTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      transaction.routeLabel,
+                      transaction.paymentMethodLabel,
                       style: AppTextStyles.labelMedium.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -1272,6 +1257,16 @@ class _TransactionTile extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (onDelete != null)
+                    IconButton(
+                      tooltip: 'Delete transaction',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: onDelete,
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        color: AppColors.error,
+                      ),
+                    ),
                   Text(
                     '৳ ${_formatAmount(_toDouble(transaction.amount))}',
                     style: AppTextStyles.labelMedium.copyWith(
@@ -1394,4 +1389,13 @@ double _toDouble(String value) {
 
 String _formatAmount(double value) {
   return value.toInt().toString();
+}
+
+double _listViewportHeight({
+  required int listLength,
+  required double itemHeight,
+}) {
+  if (listLength <= 0) return itemHeight;
+  final visibleItems = listLength < 5 ? listLength : 5;
+  return itemHeight * visibleItems;
 }

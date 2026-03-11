@@ -36,6 +36,7 @@ class CompanyListView extends GetView<CompanyListController> {
           style: TextStyle(color: AppColors.primary),
         ),
       ),
+      scrollController: controller.scrollController,
       onRefresh: controller.onRefresh,
       child: Obx(() {
         final visibleCompanies = controller.visibleCompanies;
@@ -63,95 +64,21 @@ class CompanyListView extends GetView<CompanyListController> {
                       child: _CompanyCard(
                         company: company,
                         onTap: () => controller.onCompanyPressed(company),
-                        onDelete: () => _showDeleteCompanyDialog(company),
+                        onDelete: () =>
+                            controller.onDeleteCompanyPressed(context, company),
                       ),
                     ),
                   )
                   .toList(),
+            if (controller.isLoadingMore)
+              Padding(
+                padding: EdgeInsets.only(top: AppSpacing.sm),
+                child: const Center(child: CircularProgressIndicator()),
+              ),
           ],
         );
       }),
     );
-  }
-
-  Future<void> _showDeleteCompanyDialog(CompanyModel company) async {
-    final passwordController = TextEditingController();
-    var isSubmitting = false;
-    final dialogMaxWidth = Get.width.clamp(320.0, 560.0);
-
-    await Get.dialog(
-      StatefulBuilder(
-        builder: (dialogContext, setState) {
-          return AlertDialog(
-            title: const Text('Delete Company'),
-            content: SizedBox(
-              width: dialogMaxWidth,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Enter your password to delete "${company.name}".'),
-                    SizedBox(height: AppSpacing.base),
-                    TextField(
-                      controller: passwordController,
-                      obscureText: true,
-                      enabled: !isSubmitting,
-                      decoration: const InputDecoration(
-                        hintText: 'Password',
-                        prefixIcon: Icon(Icons.lock_outline_rounded),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: isSubmitting
-                    ? null
-                    : () {
-                        if (Get.isDialogOpen ?? false) Get.back();
-                      },
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: isSubmitting
-                    ? null
-                    : () async {
-                        setState(() => isSubmitting = true);
-                        final deleted = await controller
-                            .deleteCompanyWithPassword(
-                              company: company,
-                              password: passwordController.text,
-                            );
-                        if (!deleted) {
-                          if (Get.isDialogOpen ?? false) {
-                            setState(() => isSubmitting = false);
-                          }
-                          return;
-                        }
-                        if (Get.isDialogOpen ?? false) Get.back();
-                        Get.snackbar(
-                          'Success',
-                          'Company deleted successfully.',
-                        );
-                      },
-                child: isSubmitting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Delete'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    passwordController.dispose();
   }
 }
 

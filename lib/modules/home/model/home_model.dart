@@ -1,11 +1,9 @@
 import '../../trip/models/trip_model.dart';
 import '../../Transactions/models/transaction_model.dart';
+import 'user_profile_model.dart';
 
 class HomeModel {
-  String? name;
-  String? organization;
-  String? email;
-  String? phone;
+  UserProfileModel profile;
   int shipCount;
   int companyCount;
   int tripCount;
@@ -19,11 +17,14 @@ class HomeModel {
   List<TripModel> recentTrips;
   List<TransactionModel> recentTransactions;
 
+  String get name => profile.username;
+  String get organization => profile.organization;
+  String get email => profile.email;
+  String get phone => profile.phone;
+  bool get isVerified => profile.isVerified;
+
   HomeModel({
-    this.name,
-    this.organization,
-    this.email,
-    this.phone,
+    UserProfileModel? profile,
     this.shipCount = 0,
     this.companyCount = 0,
     this.tripCount = 0,
@@ -36,15 +37,13 @@ class HomeModel {
     this.monthlyTotalDue = 0,
     List<TripModel>? recentTrips,
     List<TransactionModel>? recentTransactions,
-  }) : recentTrips = recentTrips ?? const <TripModel>[],
+  }) : profile = profile ?? const UserProfileModel(),
+       recentTrips = recentTrips ?? const <TripModel>[],
        recentTransactions = recentTransactions ?? const <TransactionModel>[];
 
   factory HomeModel.fromMap(Map<String, dynamic> map) {
     return HomeModel(
-      name: map['username'] as String?,
-      organization: map['org'] as String?,
-      email: map['email'] as String?,
-      phone: map['phone'] as String?,
+      profile: UserProfileModel.fromMap(map),
       shipCount: _toInt(map['shipCount']),
       companyCount: _toInt(map['companyCount']),
       tripCount: _toInt(map['tripCount']),
@@ -61,6 +60,7 @@ class HomeModel {
   }
 
   HomeModel copyWith({
+    UserProfileModel? profile,
     String? name,
     String? organization,
     String? email,
@@ -75,14 +75,27 @@ class HomeModel {
     int? monthlyFundOwed,
     int? monthlyFundReceived,
     int? monthlyTotalDue,
+    bool? isVerified,
     List<TripModel>? recentTrips,
     List<TransactionModel>? recentTransactions,
   }) {
+    var nextProfile = profile ?? this.profile;
+    if (name != null ||
+        organization != null ||
+        email != null ||
+        phone != null ||
+        isVerified != null) {
+      nextProfile = nextProfile.copyWith(
+        username: name,
+        organization: organization,
+        email: email,
+        phone: phone,
+        isVerified: isVerified,
+      );
+    }
+
     return HomeModel(
-      name: name ?? this.name,
-      organization: organization ?? this.organization,
-      email: email ?? this.email,
-      phone: phone ?? this.phone,
+      profile: nextProfile,
       shipCount: shipCount ?? this.shipCount,
       companyCount: companyCount ?? this.companyCount,
       tripCount: tripCount ?? this.tripCount,

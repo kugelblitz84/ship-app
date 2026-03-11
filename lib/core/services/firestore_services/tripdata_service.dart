@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 
+import 'paginated_result.dart';
 import '../../../modules/trip/models/trip_model.dart';
 
 class FirestoreTripService extends GetxService {
@@ -81,6 +82,30 @@ class FirestoreTripService extends GetxService {
   Future<List<TripModel>> getTrips() async {
     final snapshot = await _tripsCollection.get();
     return snapshot.docs.map((doc) => TripModel.fromMap(doc.data())).toList();
+  }
+
+  Future<PaginatedResult<TripModel>> getTripsPage({
+    DocumentSnapshot<Map<String, dynamic>>? startAfter,
+    int limit = 10,
+  }) async {
+    Query<Map<String, dynamic>> query = _tripsCollection
+        .orderBy('date', descending: true)
+        .limit(limit);
+
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+
+    final snapshot = await query.get();
+    final trips = snapshot.docs
+        .map((doc) => TripModel.fromMap(doc.data()))
+        .toList();
+
+    return PaginatedResult<TripModel>(
+      items: trips,
+      lastDocument: snapshot.docs.isEmpty ? startAfter : snapshot.docs.last,
+      hasMore: snapshot.docs.length == limit,
+    );
   }
 
   Future<List<TripModel>> getTripsSortedByDateDesc() async {

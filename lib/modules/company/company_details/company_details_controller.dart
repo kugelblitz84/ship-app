@@ -7,6 +7,8 @@ import '../../../core/services/firebase_auth_service.dart';
 import '../../../core/services/firestore_services/companydata_service.dart';
 import '../../../core/services/firestore_services/transactiondata_service.dart';
 import '../../../core/services/firestore_services/tripdata_service.dart';
+import '../../../core/widgets/widgets.dart';
+import '../../../modules/home/home_controller.dart';
 import '../../../routes/app_routes.dart';
 import '../../Transactions/models/transaction_model.dart';
 import '../../trip/models/trip_model.dart';
@@ -17,6 +19,8 @@ import '../utils/utils.dart';
 enum StatementTimeFilterType { all, selectedMonth, dateRange }
 
 class CompanyDetailsController extends GetxController {
+  static const int _pageSize = 10;
+
   final FirestoreCompanyService _companyService =
       Get.find<FirestoreCompanyService>();
   final FirestoreTripService _tripService = Get.find<FirestoreTripService>();
@@ -43,6 +47,31 @@ class CompanyDetailsController extends GetxController {
 
   final RxList<TripModel> trips = <TripModel>[].obs;
   final RxList<TransactionModel> transactions = <TransactionModel>[].obs;
+
+  final ScrollController tripsScrollController = ScrollController();
+  final ScrollController transactionsScrollController = ScrollController();
+
+  final RxBool _isLoadingMoreTrips = false.obs;
+  bool get isLoadingMoreTrips => _isLoadingMoreTrips.value;
+  final RxBool _isLoadingMoreTransactions = false.obs;
+  bool get isLoadingMoreTransactions => _isLoadingMoreTransactions.value;
+
+  final RxInt _visibleTripsCount = 0.obs;
+  final RxInt _visibleTransactionsCount = 0.obs;
+
+  bool get hasMoreTrips => _visibleTripsCount.value < trips.length;
+  bool get hasMoreTransactions =>
+      _visibleTransactionsCount.value < transactions.length;
+
+  List<TripModel> get visibleTrips {
+    final end = _visibleTripsCount.value.clamp(0, trips.length);
+    return trips.take(end).toList();
+  }
+
+  List<TransactionModel> get visibleTransactions {
+    final end = _visibleTransactionsCount.value.clamp(0, transactions.length);
+    return transactions.take(end).toList();
+  }
 
   double get totalAmountBilled {
     final companyValue = _toDouble(company?.totalAmountBilled);
@@ -90,11 +119,10 @@ class CompanyDetailsController extends GetxController {
   }
 
   double get totalAmountDue {
-    final companyValue = _toDouble(company?.totalAmountDue);
-    if (companyValue != 0) return companyValue;
+    // final companyValue = _toDouble(company?.totalAmountDue);
+    // if (companyValue != 0) return companyValue;
 
-    return totalAmountBilled -
-        totalAmountReceived +
+    return (totalAmountBilled - totalAmountReceived) -
         totalAmountCompanyAddedExpenses;
   }
 
@@ -109,6 +137,9 @@ class CompanyDetailsController extends GetxController {
     }
 
     _populateFields();
+
+    tripsScrollController.addListener(_onTripsScroll);
+    transactionsScrollController.addListener(_onTransactionsScroll);
   }
 
   @override
@@ -126,7 +157,14 @@ class CompanyDetailsController extends GetxController {
     try {
       final companyName = company!.name;
 
-      final allCompanies = await _companyService.getCompanies();
+      final companiesResponse = await ApiErrorHandler.call(
+        () => _companyService.getCompanies(),
+        fallbackMessage: 'Failed to load companies',
+      );
+      if (!companiesResponse.isSuccess || companiesResponse.data == null) {
+        return;
+      }
+      final allCompanies = companiesResponse.data!;
       final updatedCompany = allCompanies.firstWhereOrNull(
         (item) => _normalize(item.name) == _normalize(companyName),
       );
@@ -135,7 +173,14 @@ class CompanyDetailsController extends GetxController {
         _populateFields();
       }
 
-      final allTrips = await _tripService.getTrips();
+      final tripsResponse = await ApiErrorHandler.call(
+        () => _tripService.getTrips(),
+        fallbackMessage: 'Failed to load company trips',
+      );
+      if (!tripsResponse.isSuccess || tripsResponse.data == null) {
+        return;
+      }
+      final allTrips = tripsResponse.data!;
       trips.assignAll(
         allTrips.where(
           (trip) =>
@@ -143,8 +188,17 @@ class CompanyDetailsController extends GetxController {
               _normalize(companyName),
         ),
       );
+      _resetTripsPagination();
 
-      final allTransactions = await _transactionService.getTransactions();
+      final transactionsResponse = await ApiErrorHandler.call(
+        () => _transactionService.getTransactions(),
+        fallbackMessage: 'Failed to load company transactions',
+      );
+      if (!transactionsResponse.isSuccess ||
+          transactionsResponse.data == null) {
+        return;
+      }
+      final allTransactions = transactionsResponse.data!;
       transactions.assignAll(
         allTransactions.where(
           (transaction) =>
@@ -152,10 +206,38 @@ class CompanyDetailsController extends GetxController {
               _normalize(companyName),
         ),
       );
-    } catch (error) {
-      Get.snackbar('Error', 'Failed to load company details: $error');
+      _resetTransactionsPagination();
     } finally {
       _isLoading.value = false;
+    }
+  }
+
+  Future<void> loadMoreTrips() async {
+    if (_isLoadingMoreTrips.value || !hasMoreTrips) return;
+
+    _isLoadingMoreTrips.value = true;
+    try {
+      _visibleTripsCount.value = (_visibleTripsCount.value + _pageSize).clamp(
+        0,
+        trips.length,
+      );
+    } finally {
+      _isLoadingMoreTrips.value = false;
+    }
+  }
+
+  Future<void> loadMoreTransactions() async {
+    if (_isLoadingMoreTransactions.value || !hasMoreTransactions) return;
+
+    _isLoadingMoreTransactions.value = true;
+    try {
+      _visibleTransactionsCount.value =
+          (_visibleTransactionsCount.value + _pageSize).clamp(
+            0,
+            transactions.length,
+          );
+    } finally {
+      _isLoadingMoreTransactions.value = false;
     }
   }
 
@@ -273,16 +355,18 @@ class CompanyDetailsController extends GetxController {
     try {
       final updatedDescription = descriptionController.text.trim();
 
-      await _companyService.updateCompanyDetails(
-        companyName: currentCompany.name,
-        description: updatedDescription,
+      final response = await ApiErrorHandler.call(
+        () => _companyService.updateCompanyDetails(
+          companyName: currentCompany.name,
+          description: updatedDescription,
+        ),
+        fallbackMessage: 'Failed to update company details',
       );
+      if (!response.isSuccess) return;
 
       currentCompany.description = updatedDescription;
       isEditing.value = false;
       Get.snackbar('Success', 'Company details updated successfully.');
-    } catch (error) {
-      Get.snackbar('Error', 'Failed to update company details: $error');
     } finally {
       isSaving.value = false;
     }
@@ -320,12 +404,91 @@ class CompanyDetailsController extends GetxController {
 
   Future<void> extractCompanyData() async {}
 
+  Future<void> onDeleteCompanyPressed(BuildContext context) async {
+    final deleted = await showPasswordConfirmDeletionDialog(
+      context: context,
+      title: 'Delete Company',
+      message: 'Enter your password to confirm deletion.',
+      onConfirm: deleteCompanyWithPassword,
+    );
+
+    if (!deleted) return;
+    Get.back(result: true);
+  }
+
+  Future<bool> deleteTransactionWithPassword({
+    required TransactionModel transaction,
+    required String password,
+  }) async {
+    if (isDeleting.value) return false;
+
+    final trimmedPassword = password.trim();
+    if (trimmedPassword.isEmpty) {
+      Get.snackbar('Error', 'Password is required');
+      return false;
+    }
+
+    isDeleting.value = true;
+    try {
+      final reauthResponse = await ApiErrorHandler.call(
+        () => _authService.reauthenticate(trimmedPassword),
+        fallbackMessage: 'Failed to verify password',
+      );
+      if (!reauthResponse.isSuccess) return false;
+
+      final deleteResponse = await ApiErrorHandler.call(
+        () => _transactionService.deleteTransaction(
+          transactionId: transaction.transactionId,
+        ),
+        fallbackMessage: 'Failed to delete transaction',
+      );
+
+      if (!deleteResponse.isSuccess) return false;
+
+      await loadCompanyDetails();
+      if (Get.isRegistered<HomeController>()) {
+        await Get.find<HomeController>().loadHomeData();
+      }
+      return true;
+    } finally {
+      isDeleting.value = false;
+    }
+  }
+
+  Future<void> onDeleteTransactionPressed(
+    BuildContext context,
+    TransactionModel transaction,
+  ) async {
+    final deleted = await showPasswordConfirmDeletionDialog(
+      context: context,
+      title: 'Delete Transaction',
+      message:
+          'Enter your password to delete this transaction of ৳ ${_formatAmount(_toDouble(transaction.amount))}.',
+      onConfirm: (password) => deleteTransactionWithPassword(
+        transaction: transaction,
+        password: password,
+      ),
+    );
+
+    if (!deleted) return;
+
+    Get.snackbar('Success', 'Transaction deleted successfully.');
+    await loadCompanyDetails();
+  }
+
   void openTripDetails(TripModel trip) {
     Get.toNamed(AppRoutes.tripDetails, arguments: trip);
   }
 
-  void openTransactionDetails(TransactionModel transaction) {
-    Get.toNamed(AppRoutes.transactionDetails, arguments: transaction);
+  Future<void> openTransactionDetails(TransactionModel transaction) async {
+    final result = await Get.toNamed(
+      AppRoutes.transactionDetails,
+      arguments: transaction,
+    );
+
+    if (result == true) {
+      await loadCompanyDetails();
+    }
   }
 
   void _populateFields() {
@@ -336,8 +499,54 @@ class CompanyDetailsController extends GetxController {
 
   @override
   void onClose() {
+    tripsScrollController
+      ..removeListener(_onTripsScroll)
+      ..dispose();
+    transactionsScrollController
+      ..removeListener(_onTransactionsScroll)
+      ..dispose();
     descriptionController.dispose();
     super.onClose();
+  }
+
+  void _resetTripsPagination() {
+    _visibleTripsCount.value = trips.length < _pageSize
+        ? trips.length
+        : _pageSize;
+    _isLoadingMoreTrips.value = false;
+  }
+
+  void _resetTransactionsPagination() {
+    _visibleTransactionsCount.value = transactions.length < _pageSize
+        ? transactions.length
+        : _pageSize;
+    _isLoadingMoreTransactions.value = false;
+  }
+
+  void _onTripsScroll() {
+    if (!tripsScrollController.hasClients ||
+        _isLoadingMoreTrips.value ||
+        !hasMoreTrips) {
+      return;
+    }
+
+    final position = tripsScrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 200) {
+      loadMoreTrips();
+    }
+  }
+
+  void _onTransactionsScroll() {
+    if (!transactionsScrollController.hasClients ||
+        _isLoadingMoreTransactions.value ||
+        !hasMoreTransactions) {
+      return;
+    }
+
+    final position = transactionsScrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 200) {
+      loadMoreTransactions();
+    }
   }
 
   double _toDouble(dynamic value) {
@@ -367,6 +576,10 @@ class CompanyDetailsController extends GetxController {
 
   bool _isCompanyAddedToDueExpense(TransactionModel transaction) {
     return _isExpense(transaction) && !_isMainBalanceExpense(transaction);
+  }
+
+  String _formatAmount(double value) {
+    return value.toInt().toString();
   }
 
   List<TripModel> _filteredTrips() {

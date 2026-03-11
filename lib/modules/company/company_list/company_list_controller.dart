@@ -1,11 +1,13 @@
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:urgent/core/services/api_error_handler.dart';
 import 'package:urgent/core/services/firebase_auth_service.dart';
 import 'package:urgent/core/services/firestore_services/companydata_service.dart';
 import 'package:urgent/core/services/firestore_services/transactiondata_service.dart';
 import 'package:urgent/core/services/firestore_services/tripdata_service.dart';
 import 'package:urgent/modules/Transactions/models/transaction_model.dart';
+import 'package:urgent/core/widgets/widgets.dart';
 import 'package:urgent/modules/company/models/company_model.dart';
 import 'package:urgent/modules/trip/models/trip_model.dart';
 import 'package:urgent/routes/app_routes.dart';
@@ -15,15 +17,22 @@ enum CompanySortOption { nameAZ, nameZA, tripsHighToLow, transactionsHighToLow }
 enum CompanyActivityFilter { all, withTrips, withTransactions, withBoth }
 
 class CompanyListController extends GetxController {
+  static const int _pageSize = 10;
+
   final FirestoreCompanyService _companyService =
       Get.find<FirestoreCompanyService>();
   final AuthService _authService = Get.find<AuthService>();
   final FirestoreTripService _tripService = Get.find<FirestoreTripService>();
   final FirestoreTransactionService _transactionService =
       Get.find<FirestoreTransactionService>();
+  final ScrollController scrollController = ScrollController();
 
-  final RxBool _isLoading = true.obs;
+  final RxBool _isLoading = false.obs;
   bool get isLoading => _isLoading.value;
+  final RxBool _isLoadingMore = false.obs;
+  bool get isLoadingMore => _isLoadingMore.value;
+  final RxBool _hasMore = true.obs;
+  bool get hasMore => _hasMore.value;
 
   final RxList<CompanyModel> companies = <CompanyModel>[].obs;
   final TextEditingController searchController = TextEditingController();
@@ -34,6 +43,7 @@ class CompanyListController extends GetxController {
   final RxBool isDeleting = false.obs;
   final Map<String, int> _tripCountsByCompany = <String, int>{};
   final Map<String, int> _transactionCountsByCompany = <String, int>{};
+  DocumentSnapshot<Map<String, dynamic>>? _lastDocument;
 
   @override
   void onInit() {
@@ -41,59 +51,101 @@ class CompanyListController extends GetxController {
     searchController.addListener(() {
       searchQuery.value = searchController.text;
     });
-    loadCompanies();
+    scrollController.addListener(_onScroll);
+    loadCompanies(reset: true);
   }
 
   @override
   void onClose() {
+    scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
     searchController.dispose();
     super.onClose();
   }
 
-  Future<void> loadCompanies({bool showLoader = true}) async {
+  Future<void> loadCompanies({
+    bool showLoader = true,
+    bool reset = false,
+  }) async {
+    if (reset) {
+      _lastDocument = null;
+      _hasMore.value = true;
+      companies.clear();
+    }
+
+    if (!_hasMore.value && !reset) {
+      return;
+    }
+
+    if (_isLoadingMore.value || (showLoader && _isLoading.value)) {
+      return;
+    }
+
     if (showLoader) {
       _isLoading.value = true;
+    } else {
+      _isLoadingMore.value = true;
     }
 
     final response = await ApiErrorHandler.call(
-      () => _companyService.getCompanies(),
+      () => _companyService.getCompaniesPage(
+        startAfter: _lastDocument,
+        limit: _pageSize,
+      ),
       fallbackMessage: 'Failed to load companies',
       showErrorSnackbar: !showLoader,
     );
 
     if (response.isSuccess && response.data != null) {
-      companies.assignAll(response.data!);
+      final page = response.data!;
+      if (reset) {
+        companies.assignAll(page.items);
+      } else {
+        companies.addAll(page.items);
+      }
+      _lastDocument = page.lastDocument;
+      _hasMore.value = page.hasMore;
 
-      final tripsResponse = await ApiErrorHandler.call(
-        () => _tripService.getTrips(),
-        fallbackMessage: 'Failed to load trips',
-        showErrorSnackbar: !showLoader,
-      );
-      final transactionsResponse = await ApiErrorHandler.call(
-        () => _transactionService.getTransactions(),
-        fallbackMessage: 'Failed to load transactions',
-        showErrorSnackbar: !showLoader,
-      );
-
-      _tripCountsByCompany
-        ..clear()
-        ..addAll(_groupTripCounts(tripsResponse.data));
-      _transactionCountsByCompany
-        ..clear()
-        ..addAll(_groupTransactionCounts(transactionsResponse.data));
+      if (reset ||
+          _tripCountsByCompany.isEmpty ||
+          _transactionCountsByCompany.isEmpty) {
+        await _loadCompanyActivityCounts(showLoader: showLoader);
+      }
       companies.refresh();
     }
 
     _isLoading.value = false;
+    _isLoadingMore.value = false;
+  }
+
+  Future<void> onDeleteCompanyPressed(
+    BuildContext context,
+    CompanyModel company,
+  ) async {
+    final deleted = await showPasswordConfirmDeletionDialog(
+      context: context,
+      title: 'Delete Company',
+      message: 'Enter your password to delete "${company.name}".',
+      onConfirm: (password) =>
+          deleteCompanyWithPassword(company: company, password: password),
+    );
+
+    if (!deleted) return;
+    Get.snackbar('Success', 'Company deleted successfully.');
   }
 
   Future<void> onRefresh() async {
-    await loadCompanies(showLoader: false);
+    await loadCompanies(showLoader: false, reset: true);
+  }
+
+  Future<void> loadMoreCompanies() async {
+    await loadCompanies(showLoader: false, reset: false);
   }
 
   Future<void> onAddCompanyPressed() async {
     await Get.toNamed(AppRoutes.addCompany);
-    await loadCompanies(showLoader: false);
+    await loadCompanies(showLoader: false, reset: true);
   }
 
   Future<void> onCompanyPressed(CompanyModel company) async {
@@ -101,7 +153,7 @@ class CompanyListController extends GetxController {
       AppRoutes.companyDetails,
       arguments: company,
     );
-    await loadCompanies(showLoader: false);
+    await loadCompanies(showLoader: false, reset: true);
     if (result == true) {
       Get.snackbar('Success', 'Company deleted successfully.');
     }
@@ -133,7 +185,7 @@ class CompanyListController extends GetxController {
       );
       if (!deleteResponse.isSuccess) return false;
 
-      await loadCompanies(showLoader: false);
+      await loadCompanies(showLoader: false, reset: true);
       return true;
     } finally {
       isDeleting.value = false;
@@ -252,5 +304,38 @@ class CompanyListController extends GetxController {
 
   String _normalize(String value) {
     return value.trim().toLowerCase();
+  }
+
+  Future<void> _loadCompanyActivityCounts({required bool showLoader}) async {
+    final tripsResponse = await ApiErrorHandler.call(
+      () => _tripService.getTrips(),
+      fallbackMessage: 'Failed to load trips',
+      showErrorSnackbar: !showLoader,
+    );
+    final transactionsResponse = await ApiErrorHandler.call(
+      () => _transactionService.getTransactions(),
+      fallbackMessage: 'Failed to load transactions',
+      showErrorSnackbar: !showLoader,
+    );
+
+    _tripCountsByCompany
+      ..clear()
+      ..addAll(_groupTripCounts(tripsResponse.data));
+    _transactionCountsByCompany
+      ..clear()
+      ..addAll(_groupTransactionCounts(transactionsResponse.data));
+  }
+
+  void _onScroll() {
+    if (!scrollController.hasClients ||
+        _isLoadingMore.value ||
+        !_hasMore.value) {
+      return;
+    }
+
+    final position = scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 200) {
+      loadMoreCompanies();
+    }
   }
 }

@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/material.dart';
 import '../../core/bootstrap/bootstrap_controller.dart';
 import '../../core/services/api_error_handler.dart';
 import '../../core/services/firebase_auth_service.dart';
@@ -9,11 +10,13 @@ import '../../core/services/firestore_services/shipdata_service.dart';
 import '../../core/services/firestore_services/transactiondata_service.dart';
 import '../../core/services/firestore_services/tripdata_service.dart';
 import '../../core/services/firestore_services/userdata_service.dart';
+import '../../core/widgets/widgets.dart';
 import '../../routes/app_routes.dart';
 import '../company/models/company_model.dart';
 import '../trip/models/trip_model.dart';
 import '../Transactions/models/transaction_model.dart';
 import 'model/home_model.dart';
+import 'model/user_profile_model.dart';
 
 class HomeController extends GetxController {
   final RxBool isLoading = false.obs;
@@ -70,21 +73,28 @@ class HomeController extends GetxController {
 
     isLoading.value = true;
     try {
-      isAdmin.value = await _adminAccessService.refreshCurrentUserRole();
+      final adminResponse = await ApiErrorHandler.call(
+        () => _adminAccessService.refreshCurrentUserRole(),
+        fallbackMessage: 'Failed to verify admin role',
+      );
+      if (adminResponse.isSuccess && adminResponse.data != null) {
+        isAdmin.value = adminResponse.data!;
+      }
 
       // ── Load user profile ──────────────────────────────────────────
       if (homeModel.value == null || _loadedUserId != currentUser.uid) {
-        final userData = <String, dynamic>{};
         final response = await ApiErrorHandler.call(
           () => _firestore.getUserDetails(),
           fallbackMessage: 'Failed to load user details',
           showErrorSnackbar: true,
         );
-        if (response.isSuccess && response.data != null) {
-          userData.addAll(response.data!);
+        UserProfileModel profile = response.data ?? const UserProfileModel();
+        final currentEmail = (currentUser.email ?? '').trim();
+        if (currentEmail.isNotEmpty) {
+          profile = profile.copyWith(email: currentEmail);
         }
-        userData['email'] = currentUser.email;
-        homeModel.value = HomeModel.fromMap(userData);
+
+        homeModel.value = HomeModel(profile: profile);
         _loadedUserId = currentUser.uid;
       }
 
@@ -153,9 +163,19 @@ class HomeController extends GetxController {
   }
 
   Future<void> _loadBalanceData() async {
-    // ── Lifetime totals from company summaries (source of truth) ─────
-    final totalFundOwedValue = _sumCompanyField((c) => c.totalAmountBilled);
-    final totalDueValue = _sumCompanyField((c) => c.totalAmountDue);
+    // ── Lifetime totals from trips/transactions (single calc pipeline) ──
+    final totalFundOwedValue = _allTrips.fold(
+      0,
+      (sum, trip) => sum + _toInt(trip.totalBill),
+    );
+    final totalPayments = _sumByCategory(_allTransactions, 'payment');
+    final totalCompanyExpenses = _sumByCategory(
+      _allTransactions,
+      'expenses',
+      source: 'company',
+    );
+    final totalDueValue =
+        totalFundOwedValue - totalPayments - totalCompanyExpenses;
 
     // ── Lifetime balance (cash-in-hand): payments − main-balance expenses
     final totalFundReceivedValue = _sumTransactions(
@@ -184,7 +204,7 @@ class HomeController extends GetxController {
       mainBalanceExpenses: true,
     );
 
-    // Monthly due = billed + company expenses − payments
+    // Monthly due = billed − payments − company expenses
     final monthlyPayments = _sumByCategory(monthlyTx, 'payment');
     final monthlyCompanyExpenses = _sumByCategory(
       monthlyTx,
@@ -192,12 +212,12 @@ class HomeController extends GetxController {
       source: 'company',
     );
     final monthlyTotalDueValue =
-        monthlyFundOwedValue + monthlyCompanyExpenses - monthlyPayments;
+        monthlyFundOwedValue - monthlyPayments - monthlyCompanyExpenses;
 
     _updateHomeModel(
       totalFundOwed: totalFundOwedValue,
       totalFundReceived: totalFundReceivedValue,
-      totalDue: totalDueValue,
+      totalDue: totalDueValue < 0 ? 0 : totalDueValue,
       monthlyFundOwed: monthlyFundOwedValue,
       monthlyFundReceived: monthlyFundReceivedValue,
       monthlyTotalDue: monthlyTotalDueValue < 0 ? 0 : monthlyTotalDueValue,
@@ -236,11 +256,6 @@ class HomeController extends GetxController {
   }
 
   // ── Reusable helpers ─────────────────────────────────────────────────
-
-  /// Sum a numeric string field across all loaded companies.
-  int _sumCompanyField(String Function(CompanyModel) selector) {
-    return _companies.fold(0, (sum, c) => sum + _toInt(selector(c)));
-  }
 
   /// Compute cash-in-hand from a list of transactions:
   /// + payment amounts, − main-balance expense amounts.
@@ -329,5 +344,52 @@ class HomeController extends GetxController {
     _loadedUserId = null;
 
     Get.offAllNamed(AppRoutes.login);
+  }
+
+  Future<bool> deleteTransactionWithPassword({
+    required TransactionModel transaction,
+    required String password,
+  }) async {
+    final trimmedPassword = password.trim();
+    if (trimmedPassword.isEmpty) {
+      Get.snackbar('Error', 'Password is required');
+      return false;
+    }
+
+    final reauthResponse = await ApiErrorHandler.call(
+      () => _auth.reauthenticate(trimmedPassword),
+      fallbackMessage: 'Failed to verify password',
+    );
+    if (!reauthResponse.isSuccess) return false;
+
+    final deleteResponse = await ApiErrorHandler.call(
+      () => _transactionService.deleteTransaction(
+        transactionId: transaction.transactionId,
+      ),
+      fallbackMessage: 'Failed to delete transaction',
+    );
+    if (!deleteResponse.isSuccess) return false;
+
+    await loadHomeData();
+    return true;
+  }
+
+  Future<void> onDeleteTransactionPressed(
+    BuildContext context,
+    TransactionModel transaction,
+  ) async {
+    final deleted = await showPasswordConfirmDeletionDialog(
+      context: context,
+      title: 'Delete Transaction',
+      message:
+          'Enter your password to delete this transaction of ৳ ${transaction.amount}.',
+      onConfirm: (password) => deleteTransactionWithPassword(
+        transaction: transaction,
+        password: password,
+      ),
+    );
+
+    if (!deleted) return;
+    Get.snackbar('Success', 'Transaction deleted successfully.');
   }
 }

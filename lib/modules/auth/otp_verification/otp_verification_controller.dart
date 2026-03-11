@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import '../../../core/services/api_error_handler.dart';
 import '../../../core/services/firebase_auth_service.dart';
+import '../../../core/services/firestore_services/userdata_service.dart';
 import '../../../core/services/local_otp_service.dart';
 import '../../../routes/app_routes.dart';
 
 class OtpVerificationController extends GetxController {
   final AuthService _auth = Get.find<AuthService>();
   final LocalOtpService _otpService = Get.find<LocalOtpService>();
+  final FirestoreUserService _firestoreUserService =
+      Get.find<FirestoreUserService>();
 
   final targetEmail = ''.obs;
   final isSendingOtp = false.obs;
@@ -48,13 +52,16 @@ class OtpVerificationController extends GetxController {
 
     isSendingOtp.value = true;
     try {
-      await _otpService.issueOtp(email: targetEmail.value);
+      final response = await OtpMailerErrorHandler.call(
+        () => _otpService.issueOtp(email: targetEmail.value),
+        fallbackMessage: 'Failed to send OTP. Please try again.',
+      );
+      if (!response.isSuccess) return;
+
       Get.snackbar(
         'OTP Sent',
         'A 6-digit OTP has been sent to ${targetEmail.value}.',
       );
-    } catch (_) {
-      Get.snackbar('Error', 'Failed to send OTP. Please try again.');
     } finally {
       isSendingOtp.value = false;
     }
@@ -103,13 +110,26 @@ class OtpVerificationController extends GetxController {
 
     isVerifyingOtp.value = true;
     try {
-      final result = await _otpService.verifyOtp(
-        email: targetEmail.value,
-        enteredOtp: _enteredOtp,
+      final response = await OtpMailerErrorHandler.call(
+        () => _otpService.verifyOtp(
+          email: targetEmail.value,
+          enteredOtp: _enteredOtp,
+        ),
+        fallbackMessage: 'Failed to verify OTP. Please try again.',
       );
+      if (!response.isSuccess || response.data == null) return;
+
+      final result = response.data!;
 
       switch (result.status) {
         case OtpValidationStatus.success:
+          final verificationResponse = await ApiErrorHandler.call(
+            () => _firestoreUserService.setCurrentUserVerified(true),
+            fallbackMessage:
+                'OTP validated but verification status update failed.',
+          );
+          if (!verificationResponse.isSuccess) return;
+
           Get.toNamed(AppRoutes.postVerificationDetails);
           break;
         case OtpValidationStatus.invalid:

@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 
-import '../../../../core/themes/themes.dart';
-import '../../../../core/widgets/widgets.dart';
-import '../../utils/invoice_util.dart';
+import '../../../core/themes/themes.dart';
+import '../../../core/widgets/widgets.dart';
+import '../models/transaction_model.dart';
+import '../utils/invoice_util.dart';
 import 'transaction_details_controller.dart';
 
 class TransactionDetailsView extends GetView<TransactionDetailsController> {
@@ -16,9 +17,31 @@ class TransactionDetailsView extends GetView<TransactionDetailsController> {
 
     return AppSliverScaffold(
       title: 'Transaction Details',
-      subtitle: 'Payment and related record information',
+      subtitle: 'Payment, expense, and trip record information',
       icon: Icons.receipt_long_rounded,
       maxContentWidth: 1120,
+      actions: transaction == null
+          ? null
+          : [
+              Obx(
+                () => IconButton(
+                  tooltip: 'Delete transaction',
+                  onPressed: controller.isDeleting.value
+                      ? null
+                      : () => controller.onDeleteTransactionPressed(context),
+                  icon: controller.isDeleting.value
+                      ? SizedBox(
+                          width: 18.w,
+                          height: 18.w,
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.delete_outline_rounded),
+                ),
+              ),
+            ],
       child: transaction == null
           ? _InvalidTransactionState(onBackPressed: () => Get.back())
           : Column(
@@ -31,10 +54,10 @@ class TransactionDetailsView extends GetView<TransactionDetailsController> {
                 ),
                 SizedBox(height: AppSpacing.base),
 
-                // ── Payment Summary ───────────────────────────
+                // ── Transaction Summary ───────────────────────
                 _SectionCard(
                   icon: Icons.paid_outlined,
-                  title: 'Payment Summary',
+                  title: 'Transaction Summary',
                   children: [
                     _DetailRow(
                       icon: Icons.paid_outlined,
@@ -436,6 +459,9 @@ String _formatTransactionCategory(String transactionType) {
   if (normalized == 'expenses') {
     return 'Expenses';
   }
+  if (normalized == 'trips') {
+    return 'Trip';
+  }
   return 'Payment';
 }
 
@@ -449,7 +475,7 @@ String _formatExpenseSource(String expenseSource) {
     return 'From Main Balance';
   }
   if (normalized == 'company') {
-    return 'Added to Due';
+    return 'Deducted from Due';
   }
   if (normalized.isEmpty) {
     return 'N/A';

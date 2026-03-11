@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../core/services/api_error_handler.dart';
 import '../../../core/services/firestore_services/tripdata_service.dart';
 import '../models/trip_model.dart';
 
@@ -115,17 +116,19 @@ class TripDetailsController extends GetxController {
 
       currentTrip.isEdited = true;
 
-      await _tripService.updateTrip(
-        trip: currentTrip,
-        previousFrom: previousFrom,
-        previousTo: previousTo,
-        previousDate: previousDate,
+      final response = await ApiErrorHandler.call(
+        () => _tripService.updateTrip(
+          trip: currentTrip,
+          previousFrom: previousFrom,
+          previousTo: previousTo,
+          previousDate: previousDate,
+        ),
+        fallbackMessage: 'Failed to update trip details',
       );
+      if (!response.isSuccess) return;
 
       isEditing.value = false;
       Get.snackbar('Success', 'Trip details updated successfully.');
-    } catch (error) {
-      Get.snackbar('Error', 'Failed to update trip details: $error');
     } finally {
       isSaving.value = false;
     }

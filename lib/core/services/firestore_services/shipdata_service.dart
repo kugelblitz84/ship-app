@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 
+import 'paginated_result.dart';
 import '../../../modules/ship/models/ship_model.dart';
 
 class FirestoreShipService extends GetxService {
@@ -54,6 +55,30 @@ class FirestoreShipService extends GetxService {
           );
 
     return ships;
+  }
+
+  Future<PaginatedResult<ShipModel>> getShipsPage({
+    DocumentSnapshot<Map<String, dynamic>>? startAfter,
+    int limit = 10,
+  }) async {
+    Query<Map<String, dynamic>> query = _shipsCollection
+        .orderBy(FieldPath.documentId)
+        .limit(limit);
+
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+
+    final snapshot = await query.get();
+    final ships = snapshot.docs
+        .map((doc) => ShipModel.fromMap(doc.data()))
+        .toList();
+
+    return PaginatedResult<ShipModel>(
+      items: ships,
+      lastDocument: snapshot.docs.isEmpty ? startAfter : snapshot.docs.last,
+      hasMore: snapshot.docs.length == limit,
+    );
   }
 
   Future<void> updateShipDetails({

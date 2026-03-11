@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:urgent/core/services/api_error_handler.dart';
-import 'package:urgent/core/services/firestore_services/user_access_service.dart';
 import 'package:urgent/core/services/firestore_services/userdata_service.dart';
 import '../../../core/bootstrap/bootstrap_controller.dart';
 import '../../../routes/app_routes.dart';
@@ -19,7 +18,6 @@ class PostVerificationDetailsController extends GetxController {
 
   final FirestoreUserService _firestoreService =
       Get.find<FirestoreUserService>();
-  final UserAccessService _userAccessService = Get.find<UserAccessService>();
   Future<void> onContinuePressed() async {
     if (_isLoading.value) return;
     if (!(formKey.currentState?.validate() ?? false)) return;
@@ -37,6 +35,12 @@ class PostVerificationDetailsController extends GetxController {
         fallbackMessage: 'Failed to save user details',
       );
       if (!response.isSuccess) return;
+
+      final verificationResponse = await ApiErrorHandler.call(
+        () => _firestoreService.setCurrentUserVerified(true),
+        fallbackMessage: 'Failed to finalize account verification',
+      );
+      if (!verificationResponse.isSuccess) return;
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(BootstrapController.loginStatusKey, true);

@@ -48,7 +48,7 @@ class AddExpensesTransactionView
                   ),
                   SizedBox(height: 6.h),
                   Text(
-                    'Ship is required. Company is required only for company-based expenses.',
+                    'Ship is optional. Company is required only for company-based expenses.',
                     style: AppTextStyles.bodyMedium,
                   ),
                   SizedBox(height: AppSpacing.base),
@@ -96,7 +96,7 @@ class AddExpensesTransactionView
                   AppTextField(
                     controller: controller.amountController,
                     label: 'Amount',
-                    hint: '5000',
+                    hint: 'Enter amount',
                     prefixIcon: Icons.currency_exchange_rounded,
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
@@ -216,7 +216,7 @@ class AddExpensesTransactionView
           Expanded(
             child: Text(
               isCompanySource
-                  ? 'Company Due selected. This expense will be added to the selected company due amount.'
+                  ? 'Company Due selected. This expense will be deducted from the selected company due amount.'
                   : 'Main Balance selected. This expense will be deducted from lifetime total fund received.',
               style: AppTextStyles.bodySmall,
             ),
@@ -250,7 +250,7 @@ class AddExpensesTransactionView
           value: shouldDisable ? null : selectedValue,
           decoration: InputDecoration(
             hintText: shouldDisable
-                ? 'N/A for main balance expenses'
+                ? 'N/A for main balance'
                 : (isLoading ? 'Loading companies...' : 'Select company'),
             prefixIcon: const Icon(Icons.business_outlined),
           ),
@@ -287,7 +287,7 @@ class AddExpensesTransactionView
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Ship',
+          'Ship (Optional)',
           style: AppTextStyles.labelMedium.copyWith(
             color: AppColors.textPrimary,
           ),
@@ -467,95 +467,6 @@ class AddExpensesTransactionView
     }
   }
 
-  Future<void> _showDeleteMethodPasswordDialog(String method) async {
-    final passwordController = TextEditingController();
-    var isSubmitting = false;
-    final dialogMaxWidth = Get.width.clamp(320.0, 560.0);
-
-    await Get.dialog(
-      StatefulBuilder(
-        builder: (dialogContext, setState) {
-          return AlertDialog(
-            title: const Text('Delete Transaction Method'),
-            content: SizedBox(
-              width: dialogMaxWidth,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Enter your password to delete "$method".'),
-                    SizedBox(height: AppSpacing.base),
-                    TextField(
-                      controller: passwordController,
-                      obscureText: true,
-                      enabled: !isSubmitting,
-                      decoration: const InputDecoration(
-                        hintText: 'Password',
-                        prefixIcon: Icon(Icons.lock_outline_rounded),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: isSubmitting
-                    ? null
-                    : () {
-                        if (Get.isDialogOpen ?? false) Get.back();
-                      },
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: isSubmitting
-                    ? null
-                    : () async {
-                        setState(() => isSubmitting = true);
-                        final isDeleted = await controller
-                            .deleteTransactionMethodWithPassword(
-                              method: method,
-                              password: passwordController.text,
-                            );
-                        if (!isDeleted) {
-                          if (Get.isDialogOpen ?? false) {
-                            setState(() => isSubmitting = false);
-                          }
-                          return;
-                        }
-                        if (Get.isDialogOpen ?? false) Get.back();
-                        Get.snackbar(
-                          'Method Deleted',
-                          'Transaction method deleted successfully.',
-                          snackPosition: SnackPosition.TOP,
-                          backgroundColor: AppColors.successLight,
-                          colorText: AppColors.success,
-                          icon: const Icon(
-                            Icons.check_circle_rounded,
-                            color: AppColors.success,
-                          ),
-                        );
-                      },
-                child: isSubmitting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Delete'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      passwordController.dispose();
-    });
-  }
-
   Future<void> _showManageMethodsDialog() async {
     final dialogMaxWidth = Get.width.clamp(320.0, 560.0);
 
@@ -590,7 +501,10 @@ class AddExpensesTransactionView
                       await Future<void>.delayed(
                         const Duration(milliseconds: 120),
                       );
-                      await _showDeleteMethodPasswordDialog(method);
+                      await controller.onDeleteTransactionMethodPressed(
+                        context,
+                        method,
+                      );
                     },
                   ),
                 );

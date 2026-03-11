@@ -1,9 +1,11 @@
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/services/api_error_handler.dart';
 import '../../../core/services/firebase_auth_service.dart';
 import '../../../core/services/firestore_services/shipdata_service.dart';
+import '../../../core/widgets/widgets.dart';
 import '../../../routes/app_routes.dart';
 import '../models/ship_model.dart';
 
@@ -12,11 +14,18 @@ enum ShipSortOption { nameAZ, nameZA, licenseAZ, licenseZA }
 enum ShipLicenseFilter { all, withLicense, withoutLicense }
 
 class ShipListController extends GetxController {
+  static const int _pageSize = 10;
+
   final FirestoreShipService _shipService = Get.find<FirestoreShipService>();
   final AuthService _authService = Get.find<AuthService>();
+  final ScrollController scrollController = ScrollController();
 
   final RxBool _isLoading = true.obs;
   bool get isLoading => _isLoading.value;
+  final RxBool _isLoadingMore = false.obs;
+  bool get isLoadingMore => _isLoadingMore.value;
+  final RxBool _hasMore = true.obs;
+  bool get hasMore => _hasMore.value;
 
   final RxList<ShipModel> ships = <ShipModel>[].obs;
   final TextEditingController searchController = TextEditingController();
@@ -24,6 +33,7 @@ class ShipListController extends GetxController {
   final Rx<ShipSortOption> sortOption = ShipSortOption.nameAZ.obs;
   final Rx<ShipLicenseFilter> licenseFilter = ShipLicenseFilter.all.obs;
   final RxBool isDeleting = false.obs;
+  DocumentSnapshot<Map<String, dynamic>>? _lastDocument;
 
   @override
   void onInit() {
@@ -31,45 +41,80 @@ class ShipListController extends GetxController {
     searchController.addListener(() {
       searchQuery.value = searchController.text;
     });
-    loadShips();
+    scrollController.addListener(_onScroll);
+    loadShips(reset: true);
   }
 
   @override
   void onClose() {
+    scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
     searchController.dispose();
     super.onClose();
   }
 
-  Future<void> loadShips({bool showLoader = true}) async {
+  Future<void> loadShips({bool showLoader = true, bool reset = false}) async {
+    if (reset) {
+      _lastDocument = null;
+      _hasMore.value = true;
+      ships.clear();
+    }
+
+    if (!_hasMore.value && !reset) {
+      return;
+    }
+
+    if (_isLoadingMore.value || (showLoader && _isLoading.value)) {
+      return;
+    }
+
     if (showLoader) {
       _isLoading.value = true;
+    } else {
+      _isLoadingMore.value = true;
     }
 
     final response = await ApiErrorHandler.call(
-      () => _shipService.getShips(),
+      () => _shipService.getShipsPage(
+        startAfter: _lastDocument,
+        limit: _pageSize,
+      ),
       fallbackMessage: 'Failed to load ships',
       showErrorSnackbar: !showLoader,
     );
 
     if (response.isSuccess && response.data != null) {
-      ships.assignAll(response.data!);
+      final page = response.data!;
+      if (reset) {
+        ships.assignAll(page.items);
+      } else {
+        ships.addAll(page.items);
+      }
+      _lastDocument = page.lastDocument;
+      _hasMore.value = page.hasMore;
     }
 
     _isLoading.value = false;
+    _isLoadingMore.value = false;
   }
 
   Future<void> onRefresh() async {
-    await loadShips(showLoader: false);
+    await loadShips(showLoader: false, reset: true);
+  }
+
+  Future<void> loadMoreShips() async {
+    await loadShips(showLoader: false, reset: false);
   }
 
   Future<void> onAddShipPressed() async {
     await Get.toNamed(AppRoutes.addShip);
-    await loadShips(showLoader: false);
+    await loadShips(showLoader: false, reset: true);
   }
 
   Future<void> onShipPressed(ShipModel ship) async {
     final result = await Get.toNamed(AppRoutes.shipDetails, arguments: ship);
-    await loadShips(showLoader: false);
+    await loadShips(showLoader: false, reset: true);
     if (result == true) {
       Get.snackbar('Success', 'Ship deleted successfully.');
     }
@@ -101,11 +146,24 @@ class ShipListController extends GetxController {
       );
       if (!deleteResponse.isSuccess) return false;
 
-      await loadShips(showLoader: false);
+      await loadShips(showLoader: false, reset: true);
       return true;
     } finally {
       isDeleting.value = false;
     }
+  }
+
+  Future<void> onDeleteShipPressed(BuildContext context, ShipModel ship) async {
+    final deleted = await showPasswordConfirmDeletionDialog(
+      context: context,
+      title: 'Delete Ship',
+      message: 'Enter your password to delete "${ship.name}".',
+      onConfirm: (password) =>
+          deleteShipWithPassword(ship: ship, password: password),
+    );
+
+    if (!deleted) return;
+    Get.snackbar('Success', 'Ship deleted successfully.');
   }
 
   List<ShipModel> get visibleShips {
@@ -169,5 +227,18 @@ class ShipListController extends GetxController {
     searchQuery.value = '';
     licenseFilter.value = ShipLicenseFilter.all;
     sortOption.value = ShipSortOption.nameAZ;
+  }
+
+  void _onScroll() {
+    if (!scrollController.hasClients ||
+        _isLoadingMore.value ||
+        !_hasMore.value) {
+      return;
+    }
+
+    final position = scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 200) {
+      loadMoreShips();
+    }
   }
 }

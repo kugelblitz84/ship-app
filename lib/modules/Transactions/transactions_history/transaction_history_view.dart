@@ -16,22 +16,20 @@ class TransactionHistoryView extends GetView<TransactionHistoryController> {
   Widget build(BuildContext context) {
     return AppSliverScaffold(
       title: 'Transaction History',
-      subtitle: 'Review payment and expense records',
+      subtitle: 'Review payment, expense, and trip records',
       icon: Icons.receipt_long_rounded,
       maxContentWidth: 1120,
       actions: [
         Obx(
-          () => controller.showExpensesOnly.value
+          () => controller.visibleTransactions.isNotEmpty
               ? IconButton(
-                  tooltip: 'Export filtered expenses PDF',
+                  tooltip: 'Export filtered ledger PDF',
                   icon: const Icon(
                     Icons.picture_as_pdf_rounded,
                     color: AppColors.errorLight,
                     size: 25,
                   ),
-                  onPressed: controller.visibleExpenseTransactions.isEmpty
-                      ? null
-                      : controller.exportFilteredExpensesPdf,
+                  onPressed: controller.exportFilteredLedgerPdf,
                 )
               : const SizedBox.shrink(),
         ),
@@ -49,6 +47,7 @@ class TransactionHistoryView extends GetView<TransactionHistoryController> {
               : const SizedBox.shrink(),
         ),
       ],
+      scrollController: controller.scrollController,
       onRefresh: controller.onRefresh,
       child: Obx(() {
         final transactions = controller.transactions;
@@ -76,14 +75,21 @@ class TransactionHistoryView extends GetView<TransactionHistoryController> {
                       padding: EdgeInsets.only(bottom: AppSpacing.base),
                       child: _TransactionCard(
                         transaction: transaction,
-                        onTap: () => Get.toNamed(
-                          AppRoutes.transactionDetails,
-                          arguments: transaction,
+                        onTap: () =>
+                            controller.openTransactionDetails(transaction),
+                        onDelete: () => controller.onDeleteTransactionPressed(
+                          context,
+                          transaction,
                         ),
                       ),
                     ),
                   )
                   .toList(),
+            if (controller.isLoadingMore)
+              Padding(
+                padding: EdgeInsets.only(top: AppSpacing.sm),
+                child: const Center(child: CircularProgressIndicator()),
+              ),
           ],
         );
       }),
@@ -118,7 +124,7 @@ class _TransactionSearchSortFilterBar extends StatelessWidget {
               Expanded(
                 child: AppTextField(
                   controller: controller.searchController,
-                  hint: 'Search company, route, amount, type',
+                  hint: 'Search company, payment method, amount, type',
                   prefixIcon: Icons.search_rounded,
                   suffix: controller.searchQuery.value.trim().isNotEmpty
                       ? IconButton(
@@ -356,7 +362,8 @@ class _SummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final totalTransactions = transactions.length;
     final expenseCount = transactions.where((item) => item.isExpense).length;
-    final paymentCount = totalTransactions - expenseCount;
+    final paymentCount = transactions.where((item) => item.isPayment).length;
+    final tripCount = transactions.where((item) => item.isTrip).length;
     final totalAmount = transactions.fold<double>(
       0,
       (sum, transaction) => sum + _toDouble(transaction.amount),
@@ -432,6 +439,12 @@ class _SummaryCard extends StatelessWidget {
                 color: AppColors.error,
                 backgroundColor: AppColors.errorLight,
               ),
+              _MetaChip(
+                icon: Icons.route_rounded,
+                label: '$tripCount Trips',
+                color: AppColors.info,
+                backgroundColor: AppColors.infoLight,
+              ),
             ],
           ),
         ],
@@ -441,17 +454,23 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _TransactionCard extends StatelessWidget {
-  const _TransactionCard({required this.transaction, this.onTap});
+  const _TransactionCard({
+    required this.transaction,
+    this.onTap,
+    this.onDelete,
+  });
 
   final TransactionModel transaction;
   final VoidCallback? onTap;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
     final amount = _toDouble(transaction.amount);
     final isExpense = transaction.isExpense;
+    final isTrip = transaction.isTrip;
     final companyName = transaction.companyName.trim().isEmpty
-        ? 'Unknown company'
+        ? 'N/A'
         : transaction.companyName;
     final dateLabel = transaction.date.trim().isEmpty ? '--' : transaction.date;
     final transactionTypeLabel = transaction.transactionTypeLabel;
@@ -466,11 +485,15 @@ class _TransactionCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: isExpense
                 ? const Color(0xFFFFFBF7)
+                : isTrip
+                ? const Color(0xFFF3FFF8)
                 : const Color(0xFFF8FCFF),
             borderRadius: AppRadius.lg,
             border: Border.all(
               color: isExpense
                   ? AppColors.accent.withValues(alpha: 0.35)
+                  : isTrip
+                  ? AppColors.success.withValues(alpha: 0.30)
                   : AppColors.info.withValues(alpha: 0.30),
             ),
             boxShadow: AppShadows.sm,
@@ -493,18 +516,37 @@ class _TransactionCard extends StatelessWidget {
                         ),
                         SizedBox(height: 4.h),
                         Text(
-                          transaction.routeLabel,
+                          transaction.paymentMethodLabel,
                           style: AppTextStyles.bodyMedium,
                         ),
                       ],
                     ),
                   ),
                   SizedBox(width: 8.w),
-                  Text(
-                    '৳ ${_formatAmount(amount)}',
-                    style: AppTextStyles.headlineMedium.copyWith(
-                      color: isExpense ? AppColors.accentDark : AppColors.info,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '৳ ${_formatAmount(amount)}',
+                        style: AppTextStyles.headlineMedium.copyWith(
+                          color: isExpense
+                              ? AppColors.accentDark
+                              : isTrip
+                              ? AppColors.success
+                              : AppColors.info,
+                        ),
+                      ),
+                      if (onDelete != null)
+                        IconButton(
+                          tooltip: 'Delete transaction',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: onDelete,
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            color: AppColors.error,
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -516,9 +558,15 @@ class _TransactionCard extends StatelessWidget {
                   _MetaChip(
                     icon: Icons.category_outlined,
                     label: transactionTypeLabel,
-                    color: isExpense ? AppColors.accentDark : AppColors.info,
+                    color: isExpense
+                        ? AppColors.accentDark
+                        : isTrip
+                        ? AppColors.success
+                        : AppColors.info,
                     backgroundColor: isExpense
                         ? AppColors.accentLight
+                        : isTrip
+                        ? AppColors.successLight
                         : AppColors.infoLight,
                   ),
                   if (transaction.isExpense)

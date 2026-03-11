@@ -20,6 +20,7 @@ class OtpVerificationView extends GetView<OtpVerificationController> {
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SizedBox(height: 8.h),
@@ -32,8 +33,10 @@ class OtpVerificationView extends GetView<OtpVerificationController> {
             ),
 
             // ── OTP Input Boxes ──────────────────────────────────
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8.w,
+              runSpacing: 8.h,
               children: List.generate(6, (index) => _otpBox(context, index)),
             ),
 
@@ -83,7 +86,7 @@ class OtpVerificationView extends GetView<OtpVerificationController> {
               ],
             ),
 
-            const Spacer(),
+            SizedBox(height: AppSpacing.xxl),
 
             // ── Verify Button ──────────────────────────────────────
             Obx(
@@ -112,17 +115,17 @@ class OtpVerificationView extends GetView<OtpVerificationController> {
         width: 48.w,
         height: 56.h,
         decoration: BoxDecoration(
-          color: hasValue ? AppColors.primarySurface : AppColors.neutral50,
+          color: AppColors.surface,
           borderRadius: AppRadius.md,
           border: Border.all(
             color: isFocused
                 ? AppColors.primary
                 : hasValue
-                ? AppColors.primaryLight.withValues(alpha: 0.4)
-                : AppColors.neutral200,
+                ? AppColors.primaryLight
+                : AppColors.neutral400,
             width: isFocused ? 2 : 1,
           ),
-          boxShadow: isFocused ? AppShadows.sm : null,
+          boxShadow: isFocused ? AppShadows.primaryGlow : AppShadows.sm,
         ),
         child: Focus(
           onKeyEvent: (_, event) => controller.onKeyEvent(index, event),
@@ -142,7 +145,7 @@ class OtpVerificationView extends GetView<OtpVerificationController> {
               LengthLimitingTextInputFormatter(1),
             ],
             style: AppTextStyles.headlineMedium.copyWith(
-              color: AppColors.primary,
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
             ),
             decoration: const InputDecoration(

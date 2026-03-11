@@ -94,7 +94,7 @@ class AddTripView extends GetView<AddTripController> {
                   AppTextField(
                     controller: controller.rateController,
                     label: 'Rate',
-                    hint: '15000',
+                    hint: 'Enter rate',
                     prefixIcon: Icons.paid_outlined,
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
@@ -186,12 +186,12 @@ class AddTripView extends GetView<AddTripController> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Product',
-          style: AppTextStyles.labelMedium.copyWith(
-            color: AppColors.textPrimary,
-          ),
-        ),
+        // Text(
+        //   'Product',
+        //   style: AppTextStyles.labelMedium.copyWith(
+        //     color: AppColors.textPrimary,
+        //   ),
+        // ),
         SizedBox(height: 8.h),
         AppTextField(
           controller: controller.productController,

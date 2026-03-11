@@ -57,6 +57,8 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.6
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -64,6 +66,34 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  web:
+    generate: true
+  windows:
+    generate: true
+  macos:
+    generate: true
+  linux:
+    generate: true
+  image_path: assets/logo/master_logo_appicon.png
+  adaptive_icon_foreground: assets/logo/master_logo_clean.png
+  adaptive_icon_background: "#11285A"
+  min_sdk_android: 21
+
+flutter_native_splash:
+  color: "#11285A"
+  image: assets/logo/master_logo_splash.png
+  android: true
+  ios: true
+  web: true
+  fullscreen: true
+  android_12:
+    image: assets/logo/master_logo_splash.png
+    color: "#11285A"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -75,6 +105,12 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/logo/master_logo.png
+    - assets/logo/master_logo_clean.png
+    - assets/logo/master_logo_appicon.png
+    - assets/logo/master_logo_splash.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

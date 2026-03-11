@@ -13,6 +13,17 @@ class ForgotPasswordController extends GetxController {
 
   bool get isLoading => _isLoading.value;
 
+  @override
+  void onInit() {
+    super.onInit();
+    final args = Get.arguments;
+    if (args is Map && args['email'] is String) {
+      emailController.text = (args['email'] as String).trim();
+      return;
+    }
+    emailController.text = _auth.currentUser?.email?.trim() ?? '';
+  }
+
   Future<void> onContinuePressed() async {
     if (_isLoading.value) return;
     if (!(formKey.currentState?.validate() ?? false)) return;

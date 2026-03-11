@@ -30,7 +30,7 @@ class ShipDetailsView extends GetView<ShipDetailsController> {
                 onPressed:
                     (controller.isSaving.value || controller.isDeleting.value)
                     ? null
-                    : () => _showDeleteShipDialog(context),
+                    : () => controller.onDeleteShipPressed(context),
                 icon: Icon(
                   Icons.delete_outline_rounded,
                   size: 18.sp,
@@ -160,83 +160,6 @@ class ShipDetailsView extends GetView<ShipDetailsController> {
       }),
       onRefresh: controller.onRefresh,
     );
-  }
-
-  Future<void> _showDeleteShipDialog(BuildContext context) async {
-    final passwordController = TextEditingController();
-    var isSubmitting = false;
-    final dialogMaxWidth = Get.width.clamp(320.0, 560.0);
-
-    final deleted = await Get.dialog<bool>(
-      StatefulBuilder(
-        builder: (dialogContext, setState) {
-          return AlertDialog(
-            title: const Text('Delete Ship'),
-            content: SizedBox(
-              width: dialogMaxWidth,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Enter your password to confirm deletion.'),
-                    SizedBox(height: AppSpacing.base),
-                    TextField(
-                      controller: passwordController,
-                      obscureText: true,
-                      enabled: !isSubmitting,
-                      decoration: const InputDecoration(
-                        hintText: 'Password',
-                        prefixIcon: Icon(Icons.lock_outline_rounded),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: isSubmitting
-                    ? null
-                    : () {
-                        if (Get.isDialogOpen ?? false) Get.back(result: false);
-                      },
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: isSubmitting
-                    ? null
-                    : () async {
-                        setState(() => isSubmitting = true);
-                        final isDeleted = await controller
-                            .deleteShipWithPassword(passwordController.text);
-                        if (!isDeleted) {
-                          if (Get.isDialogOpen ?? false) {
-                            setState(() => isSubmitting = false);
-                          }
-                          return;
-                        }
-                        if (Get.isDialogOpen ?? false) Get.back(result: true);
-                      },
-                child: isSubmitting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Delete'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    passwordController.dispose();
-
-    if (deleted == true) {
-      Get.back(result: true);
-    }
   }
 }
 

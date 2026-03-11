@@ -2,8 +2,11 @@ import 'package:get/get.dart';
 import '../../../core/services/api_error_handler.dart';
 import '../../../core/services/firestore_services/companydata_service.dart';
 import '../../../core/services/firestore_services/shipdata_service.dart';
+import '../../../core/services/firestore_services/transactiondata_service.dart';
 import '../../../core/services/firestore_services/tripdata_service.dart';
 import '../../../core/themes/themes.dart';
+import '../../Transactions/models/transaction_model.dart' as tx_models;
+import '../../home/home_controller.dart';
 import '../../company/models/company_model.dart';
 import '../../ship/models/ship_model.dart';
 import '../models/trip_model.dart';
@@ -32,6 +35,8 @@ class AddTripController extends GetxController {
       Get.find<FirestoreCompanyService>();
   final FirestoreShipService _shipService = Get.find<FirestoreShipService>();
   final FirestoreTripService _tripService = Get.find<FirestoreTripService>();
+  final FirestoreTransactionService _transactionService =
+      Get.find<FirestoreTransactionService>();
 
   final RxBool _isLoading = false.obs;
   bool get isLoading => _isLoading.value;
@@ -279,12 +284,36 @@ class AddTripController extends GetxController {
         ),
       );
 
-      final response = await ApiErrorHandler.call(
-        () => _tripService.addTrip(trip: trip),
-        fallbackMessage: 'Failed to add trip',
-      );
+      final response = await ApiErrorHandler.call(() async {
+        await _tripService.addTrip(trip: trip);
+
+        final tripTransaction = tx_models.TransactionModel(
+          transactionId: _transactionService.createTransactionId(),
+          transactionType: 'trips',
+          expenseSource: 'company',
+          companyAndShipInfo: tx_models.CompanyAndShipInfo(
+            companyName: selectedCompanyAndShip!.companyName,
+            shipName: selectedCompanyAndShip!.shipName,
+          ),
+          tripId: trip.tripId,
+          tripFrom: trip.from,
+          tripTo: trip.to,
+          description: description.isEmpty ? null : description,
+          amount: trip.totalBill,
+          totalPrice: '0',
+          amountDue: '0',
+          date: trip.date,
+          type: 'trip',
+        );
+
+        await _transactionService.addTransaction(transaction: tripTransaction);
+      }, fallbackMessage: 'Failed to add trip');
 
       if (!response.isSuccess) return;
+
+      if (Get.isRegistered<HomeController>()) {
+        await Get.find<HomeController>().loadHomeData();
+      }
 
       clear();
       Get.back();

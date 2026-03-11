@@ -34,10 +34,22 @@ class LoginController extends GetxController {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool(BootstrapController.loginStatusKey, true);
         final uid = _auth.currentUser?.uid ?? response.data?.user?.uid ?? '';
-        final isBlocked = await _userAccessService.isCurrentUserBlocked(uid);
-        if (isBlocked) {
+        final accessResponse = await ApiErrorHandler.call(
+          () => _userAccessService.getCurrentUserAccessStatus(uid),
+          fallbackMessage: 'Failed to verify account access',
+        );
+        if (!accessResponse.isSuccess || accessResponse.data == null) return;
+
+        final accessStatus = accessResponse.data!;
+        if (accessStatus.isBlocked) {
           _adminAccess.clear();
           Get.offAllNamed(AppRoutes.lockedAccount);
+          return;
+        }
+
+        if (!accessStatus.isVerified) {
+          _adminAccess.clear();
+          Get.offAllNamed(AppRoutes.unverifiedAccount);
           return;
         }
 

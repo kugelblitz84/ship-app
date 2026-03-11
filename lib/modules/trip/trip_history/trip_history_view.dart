@@ -30,6 +30,7 @@ class TripHistoryView extends GetView<TripHistoryController> {
               : const SizedBox.shrink(),
         ),
       ],
+      scrollController: controller.scrollController,
       child: Obx(() {
         final filteredTrips = controller.filteredTrips;
 
@@ -57,6 +58,11 @@ class TripHistoryView extends GetView<TripHistoryController> {
                     ),
                   )
                   .toList(),
+            if (controller.isLoadingMore.value)
+              Padding(
+                padding: EdgeInsets.only(top: AppSpacing.sm),
+                child: const Center(child: CircularProgressIndicator()),
+              ),
           ],
         );
       }),

@@ -1,9 +1,14 @@
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/services/api_error_handler.dart';
+import '../../../core/services/firebase_auth_service.dart';
 import '../../../core/services/firestore_services/transactiondata_service.dart';
+import '../../../core/widgets/widgets.dart';
+import '../../../modules/home/home_controller.dart';
+import '../../../routes/app_routes.dart';
 import '../models/transaction_model.dart';
 import '../utils/expenses_hostory_util.dart';
 
@@ -17,11 +22,21 @@ enum TransactionSortOption {
 }
 
 class TransactionHistoryController extends GetxController {
+  static const int _pageSize = 10;
+
   final FirestoreTransactionService _transactionService =
       Get.find<FirestoreTransactionService>();
+  final AuthService _authService = Get.find<AuthService>();
+  final ScrollController scrollController = ScrollController();
 
   final RxBool _isLoading = false.obs;
   bool get isLoading => _isLoading.value;
+  final RxBool _isLoadingMore = false.obs;
+  bool get isLoadingMore => _isLoadingMore.value;
+  final RxBool _hasMore = true.obs;
+  bool get hasMore => _hasMore.value;
+
+  final RxBool isDeleting = false.obs;
 
   final RxList<TransactionModel> transactions = <TransactionModel>[].obs;
   final TextEditingController searchController = TextEditingController();
@@ -35,6 +50,7 @@ class TransactionHistoryController extends GetxController {
   final RxBool showExpensesOnly = false.obs;
   final RxBool includeAddedToDueExpenses = true.obs;
   final RxBool includeMainBalanceExpenses = true.obs;
+  DocumentSnapshot<Map<String, dynamic>>? _lastDocument;
 
   @override
   void onInit() {
@@ -42,35 +58,145 @@ class TransactionHistoryController extends GetxController {
     searchController.addListener(() {
       searchQuery.value = searchController.text;
     });
-    loadTransactions();
+    scrollController.addListener(_onScroll);
+    loadTransactions(reset: true);
   }
 
   @override
   void onClose() {
+    scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
     searchController.dispose();
     super.onClose();
   }
 
-  Future<void> loadTransactions({bool showLoader = true}) async {
+  Future<void> loadTransactions({
+    bool showLoader = true,
+    bool reset = false,
+  }) async {
+    if (reset) {
+      _lastDocument = null;
+      _hasMore.value = true;
+      transactions.clear();
+    }
+
+    if (!_hasMore.value && !reset) {
+      return;
+    }
+
+    if (_isLoadingMore.value || (showLoader && _isLoading.value)) {
+      return;
+    }
+
     if (showLoader) {
       _isLoading.value = true;
+    } else {
+      _isLoadingMore.value = true;
     }
 
     final response = await ApiErrorHandler.call(
-      () => _transactionService.getTransactions(),
+      () => _transactionService.getTransactionsPage(
+        startAfter: _lastDocument,
+        limit: _pageSize,
+      ),
       fallbackMessage: 'Failed to load transactions',
       showErrorSnackbar: true,
     );
 
     if (response.isSuccess && response.data != null) {
-      transactions.assignAll(response.data!);
+      final page = response.data!;
+      if (reset) {
+        transactions.assignAll(page.items);
+      } else {
+        transactions.addAll(page.items);
+      }
+      _lastDocument = page.lastDocument;
+      _hasMore.value = page.hasMore;
     }
 
     _isLoading.value = false;
+    _isLoadingMore.value = false;
   }
 
   Future<void> onRefresh() {
-    return loadTransactions(showLoader: false);
+    return loadTransactions(showLoader: false, reset: true);
+  }
+
+  Future<void> loadMoreTransactions() {
+    return loadTransactions(showLoader: false, reset: false);
+  }
+
+  Future<bool> deleteTransactionWithPassword({
+    required TransactionModel transaction,
+    required String password,
+  }) async {
+    if (isDeleting.value) return false;
+
+    final trimmedPassword = password.trim();
+    if (trimmedPassword.isEmpty) {
+      Get.snackbar('Error', 'Password is required');
+      return false;
+    }
+
+    isDeleting.value = true;
+    try {
+      final reauthResponse = await ApiErrorHandler.call(
+        () => _authService.reauthenticate(trimmedPassword),
+        fallbackMessage: 'Failed to verify password',
+      );
+      if (!reauthResponse.isSuccess) return false;
+
+      final deleteResponse = await ApiErrorHandler.call(
+        () => _transactionService.deleteTransaction(
+          transactionId: transaction.transactionId,
+        ),
+        fallbackMessage: 'Failed to delete transaction',
+      );
+      if (!deleteResponse.isSuccess) return false;
+
+      transactions.removeWhere(
+        (item) => item.transactionId == transaction.transactionId,
+      );
+      if (Get.isRegistered<HomeController>()) {
+        await Get.find<HomeController>().loadHomeData();
+      }
+      return true;
+    } finally {
+      isDeleting.value = false;
+    }
+  }
+
+  Future<void> onDeleteTransactionPressed(
+    BuildContext context,
+    TransactionModel transaction,
+  ) async {
+    final deleted = await showPasswordConfirmDeletionDialog(
+      context: context,
+      title: 'Delete Transaction',
+      message:
+          'Enter your password to delete this transaction of ৳ ${_formatAmount(_toDouble(transaction.amount))}.',
+      onConfirm: (password) => deleteTransactionWithPassword(
+        transaction: transaction,
+        password: password,
+      ),
+    );
+
+    if (!deleted) return;
+
+    Get.snackbar('Success', 'Transaction deleted successfully.');
+    await loadTransactions(showLoader: false, reset: true);
+  }
+
+  Future<void> openTransactionDetails(TransactionModel transaction) async {
+    final result = await Get.toNamed(
+      AppRoutes.transactionDetails,
+      arguments: transaction,
+    );
+
+    if (result == true) {
+      await loadTransactions(showLoader: false, reset: true);
+    }
   }
 
   List<TransactionModel> get visibleTransactions {
@@ -96,7 +222,7 @@ class TransactionHistoryController extends GetxController {
       final companyFilterMatch =
           selectedCompanyFilter.isEmpty || company == selectedCompanyFilter;
       final expenseToggleMatch = _matchesExpenseToggleFilter(transaction);
-      final route = transaction.routeLabel.toLowerCase();
+      final paymentMethod = transaction.paymentMethodLabel.toLowerCase();
       final amount = transaction.amount.toLowerCase();
       final type = transaction.type.toLowerCase();
       final transactionType = transaction.transactionType.toLowerCase();
@@ -106,7 +232,7 @@ class TransactionHistoryController extends GetxController {
       final searchMatch =
           query.isEmpty ||
           company.contains(query) ||
-          route.contains(query) ||
+          paymentMethod.contains(query) ||
           amount.contains(query) ||
           type.contains(query) ||
           transactionType.contains(query) ||
@@ -236,23 +362,18 @@ class TransactionHistoryController extends GetxController {
     sortOption.value = TransactionSortOption.newest;
   }
 
-  Future<void> exportFilteredExpensesPdf() async {
-    if (!showExpensesOnly.value) {
+  Future<void> exportFilteredLedgerPdf() async {
+    final ledgerTransactions = visibleTransactions;
+    if (ledgerTransactions.isEmpty) {
       Get.snackbar(
-        'Enable Expense Filter',
-        'Turn on Only expenses before exporting PDF.',
+        'No Transactions',
+        'No filtered transactions found to export ledger.',
       );
       return;
     }
 
-    final expenses = visibleExpenseTransactions;
-    if (expenses.isEmpty) {
-      Get.snackbar('No Expenses', 'No filtered expenses found to export.');
-      return;
-    }
-
-    await ExpensesHistoryUtil.saveExpensesHistoryAndNotify(
-      expenses,
+    await TransactionLedgerHistoryUtil.saveTransactionLedgerAndNotify(
+      ledgerTransactions,
       dateFilterLabel: _activeDateFilterLabel(),
     );
   }
@@ -335,6 +456,10 @@ class TransactionHistoryController extends GetxController {
     return 0;
   }
 
+  String _formatAmount(double value) {
+    return value.toInt().toString();
+  }
+
   bool _matchesExpenseToggleFilter(TransactionModel transaction) {
     final isExpense = transaction.isExpense;
 
@@ -362,5 +487,18 @@ class TransactionHistoryController extends GetxController {
     return includeDueExpense ||
         includeMainBalanceExpense ||
         includeUnknownExpenseSource;
+  }
+
+  void _onScroll() {
+    if (!scrollController.hasClients ||
+        _isLoadingMore.value ||
+        !_hasMore.value) {
+      return;
+    }
+
+    final position = scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 200) {
+      loadMoreTransactions();
+    }
   }
 }

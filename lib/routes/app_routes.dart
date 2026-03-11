@@ -21,8 +21,10 @@ class AppRoutes {
   static const String forgotPassword = '/forgot-password';
   static const String resetPassword = '/reset-password';
   static const String lockedAccount = '/locked-account';
+  static const String unverifiedAccount = '/unverified-account';
   static const String forceUpdate = '/force-update';
   static const String adminUsers = '/admin-users';
   static const String firebaseEmailVerification =
       '/firebase-email-verification';
+  static const String profileEdit = '/profile-edit';
 }

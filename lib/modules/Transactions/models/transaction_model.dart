@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 
 class TransactionModel {
   String transactionId;
-  String transactionType; //payment, expenses
+  String transactionType; // payment, expenses, trips
   String expenseSource; //company, main-balance
   CompanyAndShipInfo companyAndShipInfo;
   String tripId;
@@ -78,22 +78,23 @@ class TransactionModel {
         ? readString(map['tripTo']).trim()
         : readString(map['to']).trim();
     final tripIdValue = readString(map['tripId']).trim();
-    final transactionCategoryRaw = readString(map['transactionType'])
-      .trim()
-      .toLowerCase();
-    final expenseSourceRaw = readString(map['expenseSource'])
-      .trim()
-      .toLowerCase();
+    final transactionCategoryRaw = readString(
+      map['transactionType'],
+    ).trim().toLowerCase();
+    final expenseSourceRaw = readString(
+      map['expenseSource'],
+    ).trim().toLowerCase();
     final normalizedTransactionCategory = transactionCategoryRaw.isEmpty
-      ? 'payment'
-      : transactionCategoryRaw;
+        ? 'payment'
+        : transactionCategoryRaw;
     final normalizedExpenseSource = expenseSourceRaw.isEmpty
-      ? 'company'
-      : expenseSourceRaw;
+        ? 'company'
+        : expenseSourceRaw;
     final requiresCompanyName =
-      normalizedTransactionCategory == 'payment' ||
-      (normalizedTransactionCategory == 'expenses' &&
-        normalizedExpenseSource == 'company');
+        normalizedTransactionCategory == 'payment' ||
+        normalizedTransactionCategory == 'trips' ||
+        (normalizedTransactionCategory == 'expenses' &&
+            normalizedExpenseSource == 'company');
 
     if (companyName.isEmpty && requiresCompanyName) {
       debugPrint(
@@ -161,6 +162,10 @@ class TransactionModel {
 
   bool get isExpense => normalizedTransactionType == 'expenses';
 
+  bool get isPayment => normalizedTransactionType == 'payment';
+
+  bool get isTrip => normalizedTransactionType == 'trips';
+
   bool get isMainBalanceExpense =>
       isExpense && normalizedExpenseSource == 'main-balance';
 
@@ -170,6 +175,9 @@ class TransactionModel {
     }
     if (normalizedTransactionType == 'payment') {
       return 'Payment';
+    }
+    if (normalizedTransactionType == 'trips') {
+      return 'Trip';
     }
     if (normalizedTransactionType.isEmpty) {
       return 'Payment';
@@ -203,6 +211,22 @@ class TransactionModel {
 
   String get expenseSourceDisplayLabel =>
       isExpense ? expenseSourceLabel : 'N/A';
+
+  String get paymentMethodLabel {
+    final normalized = type.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return 'N/A';
+    }
+
+    return normalized
+        .split(RegExp(r'[-_\s]+'))
+        .map(
+          (part) => part.isEmpty
+              ? part
+              : '${part[0].toUpperCase()}${part.substring(1)}',
+        )
+        .join(' ');
+  }
 
   bool get hasTrip =>
       tripId.trim().isNotEmpty ||

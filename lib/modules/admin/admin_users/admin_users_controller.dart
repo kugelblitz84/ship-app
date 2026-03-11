@@ -34,7 +34,13 @@ class AdminUsersController extends GetxController {
   Future<void> loadUsers() async {
     isLoading.value = true;
     try {
-      final isAdmin = await _adminAccessService.refreshCurrentUserRole();
+      final adminResponse = await ApiErrorHandler.call(
+        () => _adminAccessService.refreshCurrentUserRole(),
+        fallbackMessage: 'Failed to verify admin access',
+      );
+      if (!adminResponse.isSuccess || adminResponse.data == null) return;
+
+      final isAdmin = adminResponse.data!;
       if (!isAdmin) {
         Get.offAllNamed(AppRoutes.home);
         return;
@@ -57,7 +63,13 @@ class AdminUsersController extends GetxController {
     try {
       isExporting.value = true;
 
-      final savedFile = await _exportService.exportUsersToJsonFile();
+      final response = await ApiErrorHandler.call(
+        () => _exportService.exportUsersToJsonFile(),
+        fallbackMessage: 'Failed to export users',
+      );
+      if (!response.isSuccess || response.data == null) return;
+
+      final savedFile = response.data!;
       if (savedFile.supportsExplicitDownload) {
         final downloaded = await _downloadService.triggerDownload(savedFile);
         if (!downloaded) {

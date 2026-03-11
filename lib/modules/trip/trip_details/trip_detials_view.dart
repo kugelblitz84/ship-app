@@ -165,7 +165,7 @@ class TripDetailsView extends GetView<TripDetailsController> {
                 AppTextField(
                   controller: controller.rateController,
                   label: 'Rate',
-                  hint: 'e.g. 15000',
+                  hint: 'Enter rate',
                   prefixIcon: Icons.paid_outlined,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
@@ -201,7 +201,7 @@ class TripDetailsView extends GetView<TripDetailsController> {
     final rate = _toDouble(trip.rate);
     return SingleChildScrollView(
       padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.xl,
+        horizontal: AppSpacing.sm,
         vertical: AppSpacing.lg,
       ),
       child: Column(

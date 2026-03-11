@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'paginated_result.dart';
 import '../../../modules/company/models/company_model.dart';
 
 class FirestoreCompanyService extends GetxService {
@@ -59,6 +60,30 @@ class FirestoreCompanyService extends GetxService {
     return snapshot.docs
         .map((doc) => CompanyModel.fromMap(doc.data()))
         .toList();
+  }
+
+  Future<PaginatedResult<CompanyModel>> getCompaniesPage({
+    DocumentSnapshot<Map<String, dynamic>>? startAfter,
+    int limit = 10,
+  }) async {
+    Query<Map<String, dynamic>> query = _companiesCollection
+        .orderBy(FieldPath.documentId)
+        .limit(limit);
+
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+
+    final snapshot = await query.get();
+    final companies = snapshot.docs
+        .map((doc) => CompanyModel.fromMap(doc.data()))
+        .toList();
+
+    return PaginatedResult<CompanyModel>(
+      items: companies,
+      lastDocument: snapshot.docs.isEmpty ? startAfter : snapshot.docs.last,
+      hasMore: snapshot.docs.length == limit,
+    );
   }
 
   Future<List<CompanyModel>> getCompaniesSortedByName() async {

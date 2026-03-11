@@ -22,6 +22,13 @@ class AdminUserSummary {
   final double lifetimeEarnings;
 }
 
+class UserAccessStatus {
+  const UserAccessStatus({required this.isBlocked, required this.isVerified});
+
+  final bool isBlocked;
+  final bool isVerified;
+}
+
 class UserAccessService extends GetxService {
   UserAccessService({FirebaseFirestore? firestore})
     : _firestore = firestore ?? FirebaseFirestore.instance;
@@ -35,11 +42,26 @@ class UserAccessService extends GetxService {
   }
 
   Future<bool> isCurrentUserBlocked(String uid) async {
-    if (uid.isEmpty) return false;
+    final status = await getCurrentUserAccessStatus(uid);
+    return status.isBlocked;
+  }
+
+  Future<bool> isCurrentUserVerified(String uid) async {
+    final status = await getCurrentUserAccessStatus(uid);
+    return status.isVerified;
+  }
+
+  Future<UserAccessStatus> getCurrentUserAccessStatus(String uid) async {
+    const fallback = UserAccessStatus(isBlocked: false, isVerified: true);
+    if (uid.isEmpty) return fallback;
 
     final directSnapshot = await _userRef(uid).get();
     if (directSnapshot.exists) {
-      return _isBlockedValue(directSnapshot.data()?['isBlocked']);
+      final data = directSnapshot.data();
+      return UserAccessStatus(
+        isBlocked: _isBlockedValue(data?['isBlocked']),
+        isVerified: _isVerifiedValue(data?['isVerified']),
+      );
     }
 
     try {
@@ -49,7 +71,11 @@ class UserAccessService extends GetxService {
           .limit(1)
           .get();
       if (byUidField.docs.isNotEmpty) {
-        return _isBlockedValue(byUidField.docs.first.data()['isBlocked']);
+        final data = byUidField.docs.first.data();
+        return UserAccessStatus(
+          isBlocked: _isBlockedValue(data['isBlocked']),
+          isVerified: _isVerifiedValue(data['isVerified']),
+        );
       }
 
       final currentEmail = _auth.currentUser?.email?.trim();
@@ -60,14 +86,18 @@ class UserAccessService extends GetxService {
             .limit(1)
             .get();
         if (byEmail.docs.isNotEmpty) {
-          return _isBlockedValue(byEmail.docs.first.data()['isBlocked']);
+          final data = byEmail.docs.first.data();
+          return UserAccessStatus(
+            isBlocked: _isBlockedValue(data['isBlocked']),
+            isVerified: _isVerifiedValue(data['isVerified']),
+          );
         }
       }
     } on FirebaseException {
-      return false;
+      return fallback;
     }
 
-    return false;
+    return fallback;
   }
 
   Future<List<AdminUserSummary>> getAllUsersWithLifetimeEarnings() async {
@@ -223,5 +253,16 @@ class UserAccessService extends GetxService {
       return normalized == 'true' || normalized == '1' || normalized == 'yes';
     }
     return false;
+  }
+
+  bool _isVerifiedValue(dynamic value) {
+    if (value == null) return true;
+    if (value == true) return true;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      return normalized == 'true' || normalized == '1' || normalized == 'yes';
+    }
+    return true;
   }
 }

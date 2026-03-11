@@ -5,6 +5,7 @@ import '../../../core/services/api_error_handler.dart';
 import '../../../core/services/firebase_auth_service.dart';
 import '../../../core/services/firestore_services/shipdata_service.dart';
 import '../../../core/services/firestore_services/tripdata_service.dart';
+import '../../../core/widgets/widgets.dart';
 import '../../../routes/app_routes.dart';
 import '../../trip/models/trip_model.dart';
 import '../models/ship_model.dart';
@@ -54,7 +55,13 @@ class ShipDetailsController extends GetxController {
 
     _isLoading.value = true;
     try {
-      final allTrips = await _tripService.getTrips();
+      final response = await ApiErrorHandler.call(
+        () => _tripService.getTrips(),
+        fallbackMessage: 'Failed to load ship trips',
+      );
+      if (!response.isSuccess || response.data == null) return;
+
+      final allTrips = response.data!;
       trips.assignAll(
         allTrips.where(
           (trip) =>
@@ -62,8 +69,6 @@ class ShipDetailsController extends GetxController {
               _normalize(ship!.name),
         ),
       );
-    } catch (error) {
-      Get.snackbar('Error', 'Failed to load ship details: $error');
     } finally {
       _isLoading.value = false;
     }
@@ -90,16 +95,18 @@ class ShipDetailsController extends GetxController {
     try {
       final updatedLicense = licenseController.text.trim();
 
-      await _shipService.updateShipDetails(
-        shipName: currentShip.name,
-        licenseNumber: updatedLicense,
+      final response = await ApiErrorHandler.call(
+        () => _shipService.updateShipDetails(
+          shipName: currentShip.name,
+          licenseNumber: updatedLicense,
+        ),
+        fallbackMessage: 'Failed to update ship details',
       );
+      if (!response.isSuccess) return;
 
       currentShip.licenseNumber = updatedLicense;
       isEditing.value = false;
       Get.snackbar('Success', 'Ship details updated successfully.');
-    } catch (error) {
-      Get.snackbar('Error', 'Failed to update ship details: $error');
     } finally {
       isSaving.value = false;
     }
@@ -133,6 +140,18 @@ class ShipDetailsController extends GetxController {
     } finally {
       isDeleting.value = false;
     }
+  }
+
+  Future<void> onDeleteShipPressed(BuildContext context) async {
+    final deleted = await showPasswordConfirmDeletionDialog(
+      context: context,
+      title: 'Delete Ship',
+      message: 'Enter your password to confirm deletion.',
+      onConfirm: deleteShipWithPassword,
+    );
+
+    if (!deleted) return;
+    Get.back(result: true);
   }
 
   void openTripDetails(TripModel trip) {

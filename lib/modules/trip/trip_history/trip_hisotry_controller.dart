@@ -1,15 +1,23 @@
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../core/services/api_error_handler.dart';
 import '../../../core/services/firestore_services/tripdata_service.dart';
 import '../models/trip_model.dart';
 
 enum TripSortOption { newest, oldest, fromAZ, toAZ }
 
 class TripHistoryController extends GetxController {
+  static const int _pageSize = 10;
+
   final FirestoreTripService _tripService = Get.find<FirestoreTripService>();
+  final ScrollController scrollController = ScrollController();
 
   RxList<TripModel> trips = <TripModel>[].obs;
   RxBool isLoading = false.obs;
+  RxBool isLoadingMore = false.obs;
+  RxBool hasMore = true.obs;
+  DocumentSnapshot<Map<String, dynamic>>? _lastDocument;
 
   final TextEditingController fromFilterController = TextEditingController();
   final TextEditingController toFilterController = TextEditingController();
@@ -43,6 +51,7 @@ class TripHistoryController extends GetxController {
     searchController.addListener(() {
       searchQuery.value = searchController.text;
     });
+    scrollController.addListener(_onScroll);
 
     clearAllFilters();
   }
@@ -55,6 +64,9 @@ class TripHistoryController extends GetxController {
 
   @override
   void onClose() {
+    scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
     fromFilterController.dispose();
     toFilterController.dispose();
     productFilterController.dispose();
@@ -64,19 +76,62 @@ class TripHistoryController extends GetxController {
   }
 
   Future<void> fetchTrips() async {
-    try {
+    await fetchTripsPage(reset: true, showLoader: true);
+  }
+
+  Future<void> fetchTripsPage({
+    bool reset = false,
+    bool showLoader = false,
+  }) async {
+    if (reset) {
+      _lastDocument = null;
+      hasMore.value = true;
+      trips.clear();
+    }
+
+    if (!hasMore.value && !reset) {
+      return;
+    }
+
+    if (isLoadingMore.value || (showLoader && isLoading.value)) {
+      return;
+    }
+
+    if (showLoader) {
       isLoading.value = true;
-      final loadedTrips = await _tripService.getTrips();
-      trips.assignAll(loadedTrips);
-    } catch (e) {
-      Get.snackbar('Error', 'Failed to load trip history: $e');
+    } else {
+      isLoadingMore.value = true;
+    }
+
+    try {
+      final response = await ApiErrorHandler.call(
+        () => _tripService.getTripsPage(
+          startAfter: _lastDocument,
+          limit: _pageSize,
+        ),
+        fallbackMessage: 'Failed to load trip history',
+      );
+      if (!response.isSuccess || response.data == null) return;
+      final page = response.data!;
+      if (reset) {
+        trips.assignAll(page.items);
+      } else {
+        trips.addAll(page.items);
+      }
+      _lastDocument = page.lastDocument;
+      hasMore.value = page.hasMore;
     } finally {
       isLoading.value = false;
+      isLoadingMore.value = false;
     }
   }
 
   Future<void> onRefresh() async {
-    await fetchTrips();
+    await fetchTripsPage(reset: true, showLoader: false);
+  }
+
+  Future<void> loadMoreTrips() async {
+    await fetchTripsPage(reset: false, showLoader: false);
   }
 
   List<TripModel> get filteredTrips {
@@ -230,5 +285,16 @@ class TripHistoryController extends GetxController {
 
   DateTime _safeDate(String rawDate) {
     return DateTime.tryParse(rawDate.trim()) ?? DateTime(1970);
+  }
+
+  void _onScroll() {
+    if (!scrollController.hasClients || isLoadingMore.value || !hasMore.value) {
+      return;
+    }
+
+    final position = scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 200) {
+      loadMoreTrips();
+    }
   }
 }

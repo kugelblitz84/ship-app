@@ -56,15 +56,17 @@ class BootstrapView extends GetView<BootstrapController> {
                           gradient: AppColors.primaryGradient,
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: Icon(
-                          Icons.sailing_rounded,
-                          size: isMobile ? 30.sp : 34.sp,
-                          color: Colors.white,
+                        child: Padding(
+                          padding: EdgeInsets.all(4.w),
+                          child: Image.asset(
+                            'assets/logo/master_logo.png',
+                            fit: BoxFit.contain,
+                          ),
                         ),
                       ),
                       SizedBox(height: 16.h),
                       Text(
-                        'Urgent',
+                        'MarineLedger',
                         style: AppTextStyles.headlineMedium.copyWith(
                           fontWeight: FontWeight.w700,
                         ),

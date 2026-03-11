@@ -23,13 +23,21 @@ class AuthHeader extends StatelessWidget {
         SizedBox(height: 8.h),
         // Icon badge with primary surface background
         Container(
-          width: 64.w,
-          height: 64.w,
+          width: 68.w,
+          height: 68.w,
           decoration: BoxDecoration(
-            color: AppColors.primarySurface,
+            gradient: AppColors.primaryGradient,
             borderRadius: AppRadius.lg,
           ),
-          child: Icon(icon, size: 30.sp, color: AppColors.primary),
+          child: Padding(
+            padding: EdgeInsets.all(5.w),
+            child: Image.asset(
+              'assets/logo/master_logo.png',
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) =>
+                  Icon(icon, size: 30.sp, color: AppColors.primary),
+            ),
+          ),
         ),
         SizedBox(height: 20.h),
         Text(

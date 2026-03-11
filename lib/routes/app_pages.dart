@@ -11,8 +11,8 @@ import '../modules/Transactions/expenses/add_transaction/add_expenses_transactio
 import '../modules/Transactions/expenses/add_transaction/add_expenses_transaction_view.dart';
 import '../modules/Transactions/payments/add_transaction/add_payment_transaction_controller.dart';
 import '../modules/Transactions/payments/add_transaction/add_payment_transaction_view.dart';
-import '../modules/Transactions/payments/transaction_details/transaction_details_controller.dart';
-import '../modules/Transactions/payments/transaction_details/transaction_details_view.dart';
+import '../modules/Transactions/transaction_details/transaction_details_controller.dart';
+import '../modules/Transactions/transaction_details/transaction_details_view.dart';
 import '../modules/Transactions/transactions_history/transaction_history_controller.dart';
 import '../modules/Transactions/transactions_history/transaction_history_view.dart';
 import '../modules/home/home.dart';
@@ -36,6 +36,9 @@ import '../modules/admin/admin_users/admin_users_controller.dart';
 import '../modules/admin/admin_users/admin_users_view.dart';
 import '../modules/home/blocked/blocked_controller.dart';
 import '../modules/home/blocked/blocked_view.dart';
+import '../modules/home/blocked/unverified_blocked_view.dart';
+import '../modules/home/profile_edit/profile_edit_controller.dart';
+import '../modules/home/profile_edit/profile_edit_view.dart';
 import '../modules/update/force_update/force_update_controller.dart';
 import '../modules/update/force_update/force_update_view.dart';
 import '../core/services/firestore_services/users_export_service.dart';
@@ -89,6 +92,13 @@ class AppPages {
     GetPage(
       name: AppRoutes.lockedAccount,
       page: () => const BlockedView(),
+      binding: BindingsBuilder(() {
+        Get.lazyPut(() => BlockedController());
+      }),
+    ),
+    GetPage(
+      name: AppRoutes.unverifiedAccount,
+      page: () => const UnverifiedBlockedView(),
       binding: BindingsBuilder(() {
         Get.lazyPut(() => BlockedController());
       }),
@@ -218,6 +228,13 @@ class AppPages {
       page: () => const PostVerificationDetailsView(),
       binding: BindingsBuilder(() {
         Get.lazyPut(() => PostVerificationDetailsController());
+      }),
+    ),
+    GetPage(
+      name: AppRoutes.profileEdit,
+      page: () => const ProfileEditView(),
+      binding: BindingsBuilder(() {
+        Get.lazyPut(() => ProfileEditController());
       }),
     ),
   ];

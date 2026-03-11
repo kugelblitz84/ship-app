@@ -1,5 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
+import 'package:mailer/mailer.dart';
 import 'connectivity_watcher_service.dart';
 import '../themes/themes.dart';
 
@@ -69,4 +71,60 @@ class ApiResponse<T> {
   final String? error;
   final bool isSuccess;
   ApiResponse({this.data, this.error, required this.isSuccess});
+}
+
+class OtpMailerErrorHandler {
+  static bool get _shouldSuppressOfflineSnackbar {
+    if (!Get.isRegistered<ConnectivityWatcherService>()) {
+      return false;
+    }
+    return Get.find<ConnectivityWatcherService>().isOffline;
+  }
+
+  static Future<ApiResponse<T>> call<T>(
+    Future<T> Function() operation, {
+    bool showErrorSnackbar = true,
+    String fallbackMessage = 'Failed to process OTP request',
+  }) async {
+    try {
+      final data = await operation();
+      return ApiResponse<T>(data: data, isSuccess: true);
+    } on MailerException catch (e) {
+      final detailedProblems = e.problems
+          .map((problem) => problem.toString())
+          .join('\n');
+      final errorMsg = detailedProblems.isEmpty
+          ? 'Failed to send OTP email.\nDetails: ${e.toString()}'
+          : 'Failed to send OTP email.\nDetails:\n$detailedProblems';
+
+      debugPrint('OTP mailer failure: ${e.toString()}');
+      if (detailedProblems.isNotEmpty) {
+        debugPrint('OTP mailer problems:\n$detailedProblems');
+      }
+
+      if (showErrorSnackbar && !_shouldSuppressOfflineSnackbar) {
+        Get.snackbar(
+          'OTP Error',
+          errorMsg,
+          backgroundColor: AppColors.errorLight,
+          colorText: AppColors.error,
+        );
+      }
+      return ApiResponse<T>(error: errorMsg, isSuccess: false);
+    } catch (e, stackTrace) {
+      final errorMsg = '$fallbackMessage\nDetails: ${e.toString()}';
+      debugPrint('OTP handler unexpected error: ${e.toString()}');
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (showErrorSnackbar && !_shouldSuppressOfflineSnackbar) {
+        Get.snackbar(
+          'OTP Error',
+          errorMsg,
+          backgroundColor: AppColors.errorLight,
+          colorText: AppColors.error,
+        );
+      }
+      return ApiResponse<T>(error: errorMsg, isSuccess: false);
+    }
+  }
 }

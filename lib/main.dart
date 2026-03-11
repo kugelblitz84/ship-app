@@ -40,7 +40,7 @@ class MyApp extends StatelessWidget {
       builder: (context, child) {
         return GetMaterialApp(
           initialBinding: InitialBindings(),
-          title: 'Urgent',
+          title: 'MarineLedger',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           builder: (context, child) {

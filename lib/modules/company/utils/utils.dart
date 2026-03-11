@@ -9,6 +9,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../../core/services/download/download_service.dart';
+import '../../../core/services/firestore_services/userdata_service.dart';
 import '../../Transactions/models/transaction_model.dart' as tx_models;
 import '../../trip/models/trip_model.dart' as trip_models;
 import '../models/company_model.dart';
@@ -151,11 +152,13 @@ class CompanyStatementUtil {
     final ledger = _buildLedger(trips, transactions);
     final generatedAt = DateTime.now();
     final theme = await _buildPdfTheme();
+    final companyName = _safe(company.name);
+    final organizationName = await _resolveOrganizationName(companyName);
 
     final pdf = pw.Document(
       title: 'Company Statement',
-      author: 'Urgent',
-      creator: 'Urgent App',
+      author: 'MarineLedger',
+      creator: 'MarineLedger App',
       subject: 'Company statement ledger (debit/credit/balance)',
     );
 
@@ -182,7 +185,8 @@ class CompanyStatementUtil {
         build: (_) => [
           _buildHeader(
             generatedAt: generatedAt,
-            companyName: _safe(company.name),
+            organizationName: organizationName,
+            companyName: companyName,
           ),
           pw.SizedBox(height: 14),
           _buildCompanyInfoSection(
@@ -229,6 +233,7 @@ class CompanyStatementUtil {
 
   static pw.Widget _buildHeader({
     required DateTime generatedAt,
+    required String organizationName,
     required String companyName,
   }) {
     return pw.Container(
@@ -245,7 +250,7 @@ class CompanyStatementUtil {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text(
-                'COMPANY STATEMENT',
+                organizationName,
                 style: pw.TextStyle(
                   color: PdfColors.white,
                   fontSize: 22,
@@ -276,7 +281,7 @@ class CompanyStatementUtil {
                 DateFormat('dd MMM yyyy').format(generatedAt),
               ),
               pw.SizedBox(height: 4),
-              _metaText('Source', 'Urgent App'),
+              _metaText('Source', 'MarineLedger App'),
             ],
           ),
         ],
@@ -304,18 +309,18 @@ class CompanyStatementUtil {
             ],
           ),
         ),
-        pw.SizedBox(width: 12),
-        pw.Expanded(
-          flex: 4,
-          child: _infoCard(
-            title: 'Overview',
-            rows: [
-              'Entries: $totalEntries',
-              'Formula: previous + debit - credit',
-              'Credit is bill + due-expense, debit is payment',
-            ],
-          ),
-        ),
+        // pw.SizedBox(width: 12),
+        // pw.Expanded(
+        //   flex: 4,
+        //   child: _infoCard(
+        //     title: 'Overview',
+        //     rows: [
+        //       'Entries: $totalEntries',
+        //       'Formula: previous + debit - credit',
+        //       'Credit is bill + due-expense, debit is payment',
+        //     ],
+        //   ),
+        // ),
       ],
     );
   }
@@ -333,10 +338,12 @@ class CompanyStatementUtil {
       ),
       child: pw.Row(
         children: [
-          pw.Expanded(child: _miniStat('Total Debit (Payment)', totalDebit)),
+          pw.Expanded(
+            child: _miniStat('Total Debit (Payment + Due Expense)', totalDebit),
+          ),
           pw.SizedBox(width: 10),
           pw.Expanded(
-            child: _miniStat('Total Credit (Bill + Due Expense)', totalCredit),
+            child: _miniStat('Total Credit (Trip Bill)', totalCredit),
           ),
           pw.SizedBox(width: 10),
           pw.Expanded(
@@ -400,14 +407,14 @@ class CompanyStatementUtil {
                 color: PdfColors.blueGrey900,
               ),
             ),
-            pw.SizedBox(height: 2),
-            pw.Text(
-              'Running balance using debit and credit only.',
-              style: const pw.TextStyle(
-                fontSize: 9.5,
-                color: PdfColors.grey700,
-              ),
-            ),
+            //pw.SizedBox(height: 2),
+            // pw.Text(
+            //   'Running balance using debit and credit only.',
+            //   style: const pw.TextStyle(
+            //     fontSize: 9.5,
+            //     color: PdfColors.grey700,
+            //   ),
+            // ),
           ],
         ),
       ],
@@ -424,9 +431,9 @@ class CompanyStatementUtil {
           _cell('ID', header: true),
           _cell('Date', header: true),
           _cell('Description', header: true),
-          _cell('Product', header: true),
-          _cell('Debit (+)', header: true, right: true),
-          _cell('Credit (-)', header: true, right: true),
+          _cell('Product Info', header: true),
+          _cell('Debit', header: true, right: true),
+          _cell('Credit', header: true, right: true),
           _cell('Balance', header: true, right: true),
         ],
       ),
@@ -454,8 +461,8 @@ class CompanyStatementUtil {
           children: [
             _cell(entry.id.toString()),
             _cell(entry.displayDate),
-            _cell(entry.description),
-            _cell(entry.product),
+            _cell(entry.description, maxLines: 8),
+            _cell(entry.product, maxLines: 8),
             _cell(entry.debit > 0 ? _currency(entry.debit) : '', right: true),
             _cell(entry.credit > 0 ? _currency(entry.credit) : '', right: true),
             _cell(_currency(entry.balance), right: true),
@@ -555,15 +562,15 @@ class CompanyStatementUtil {
           pw.SizedBox(height: 6),
           pw.Text(
             description.isEmpty
-                ? 'This statement is generated from trip bills + company due-expenses (credit) and payments (debit).'
+                ? 'This statement is generated from trip bills (credit) and company due deductions + payments (debit).'
                 : description,
             style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
           ),
           pw.SizedBox(height: 8),
-          pw.Text(
-            interpretation,
-            style: const pw.TextStyle(fontSize: 9.5, color: PdfColors.grey700),
-          ),
+          // pw.Text(
+          //   interpretation,
+          //   style: const pw.TextStyle(fontSize: 9.5, color: PdfColors.grey700),
+          // ),
         ],
       ),
     );
@@ -574,14 +581,16 @@ class CompanyStatementUtil {
     List<tx_models.TransactionModel> transactions,
   ) {
     final items = <_LedgerRawItem>[];
+    final tripById = <String, trip_models.TripModel>{
+      for (final trip in trips) trip.tripId.trim(): trip,
+    };
 
     for (final trip in trips) {
-      final productName = (trip.product?.productName ?? '').trim();
       items.add(
         _LedgerRawItem(
           dateRaw: trip.date,
           description: _tripDescription(trip),
-          product: productName.isEmpty ? '-' : _pdfText(productName),
+          product: _tripProductWithDescription(trip),
           debit: 0,
           credit: _parseAmount(trip.totalBill),
           kindOrder: 0,
@@ -599,9 +608,9 @@ class CompanyStatementUtil {
           _LedgerRawItem(
             dateRaw: tx.date,
             description: _dueExpenseDescription(tx),
-            product: _txProductOrDescription(tx),
-            debit: 0,
-            credit: _parseAmount(tx.amount),
+            product: _txProductOrDescription(tx, tripById),
+            debit: _parseAmount(tx.amount),
+            credit: 0,
             kindOrder: 0,
           ),
         );
@@ -611,8 +620,8 @@ class CompanyStatementUtil {
       items.add(
         _LedgerRawItem(
           dateRaw: tx.date,
-          description: _paymentDescription(tx),
-          product: _txProductOrDescription(tx),
+          description: _paymentDescription(tx, tripById),
+          product: _txProductOrDescription(tx, tripById),
           debit: _parseAmount(tx.amount),
           credit: 0,
           kindOrder: 1,
@@ -672,38 +681,98 @@ class CompanyStatementUtil {
   }
 
   static String _tripDescription(trip_models.TripModel trip) {
+    final pricingDetails = _tripPricingDetails(trip);
     final from = _safe(trip.from);
     final to = _safe(trip.to);
     final company = _safe(trip.companyAndShipInfo.companyName);
-    return _pdfText('Trip bill: $from - $to | Company: $company');
+    final shipPart = _optionalShipLine(trip.companyAndShipInfo.shipName);
+    return _pdfText(
+      'Trip bill: $from - $to\nCompany: $company$shipPart\n$pricingDetails',
+    );
   }
 
-  static String _paymentDescription(tx_models.TransactionModel tx) {
+  static String _tripPricingDetails(trip_models.TripModel trip) {
+    if (trip.product == null) return '';
+
+    final rateValue = _parseAmount(trip.rate);
+    final quantity = (trip.product?.quantity ?? '').trim();
+    final unit = (trip.product?.unit ?? '').trim();
+
+    final rateText = rateValue > 0 ? _currency(rateValue) : 'N/A';
+    final productAmountText = quantity.isEmpty
+        ? 'N/A'
+        : unit.isEmpty
+        ? quantity
+        : '$quantity $unit';
+
+    return '\nRate: $rateText\nAmount: $productAmountText';
+  }
+
+  static String _tripProductWithDescription(trip_models.TripModel trip) {
+    final productName = (trip.product?.productName ?? '').trim();
+    final productDescription = (trip.product?.desctription ?? '').trim();
+    // final pricingDetails = _tripPricingDetails(trip);
+
+    if (productName.isNotEmpty && productDescription.isNotEmpty) {
+      return _pdfText('Name: $productName,\nDescription: $productDescription');
+    }
+
+    if (productName.isNotEmpty) {
+      return _pdfText('Name: $productName');
+    }
+
+    if (productDescription.isNotEmpty) {
+      return _pdfText('Description: $productDescription');
+    }
+
+    // if (pricingDetails.isNotEmpty) {
+    //   return _pdfText(pricingDetails.trim());
+    // }
+
+    return '-';
+  }
+
+  static String _paymentDescription(
+    tx_models.TransactionModel tx,
+    Map<String, trip_models.TripModel> tripById,
+  ) {
     final method = _formatType(tx.type);
+    final trip = tx.tripId.trim().isEmpty ? null : tripById[tx.tripId.trim()];
+    final pricingDetails = trip == null ? '' : _tripPricingDetails(trip);
     final company = _safe(tx.companyAndShipInfo.companyName ?? 'N/A');
+    final shipPart = _optionalShipLine(tx.companyAndShipInfo.shipName);
     final route = tx.hasTrip ? _pdfText(tx.routeLabel) : '';
-    final routePart = route.isNotEmpty ? ' | Route: $route' : '';
-    return _pdfText('Payment ($method)$routePart | Company: $company');
+    final routePart = route.isNotEmpty ? '\nRoute: $route' : '';
+    return _pdfText(
+      'Payment ($method)$routePart\nCompany: $company$shipPart\n$pricingDetails',
+    );
   }
 
   static String _dueExpenseDescription(tx_models.TransactionModel tx) {
     final company = _safe(tx.companyAndShipInfo.companyName ?? 'N/A');
     final source = _formatType(tx.expenseSource);
+    final shipPart = _optionalShipLine(tx.companyAndShipInfo.shipName);
     final route = tx.hasTrip ? _pdfText(tx.routeLabel) : '';
-    final routePart = route.isNotEmpty ? ' | Route: $route' : '';
-    return _pdfText('Due Expense ($source)$routePart | Company: $company');
+    final routePart = route.isNotEmpty ? '\nRoute: $route' : '';
+    return _pdfText(
+      'Due Expense ($source)$routePart\nCompany: $company$shipPart',
+    );
   }
 
-  static String _txProductOrDescription(tx_models.TransactionModel tx) {
+  static String _txProductOrDescription(
+    tx_models.TransactionModel tx,
+    Map<String, trip_models.TripModel> tripById,
+  ) {
     final desc = (tx.description ?? '').trim();
     if (desc.isNotEmpty) {
       return _pdfText(desc);
     }
 
-    if (tx.hasTrip) {
-      final route = _pdfText(tx.routeLabel);
-      if (route.isNotEmpty) {
-        return route;
+    final tripId = tx.tripId.trim();
+    if (tripId.isNotEmpty) {
+      final trip = tripById[tripId];
+      if (trip != null) {
+        return _tripProductWithDescription(trip);
       }
     }
 
@@ -800,6 +869,7 @@ class CompanyStatementUtil {
     bool right = false,
     bool bold = false,
     PdfColor? color,
+    int? maxLines,
   }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 6),
@@ -813,7 +883,7 @@ class CompanyStatementUtil {
               : pw.FontWeight.normal,
           color: color ?? (header ? PdfColors.blueGrey900 : PdfColors.grey900),
         ),
-        maxLines: header ? 2 : 4,
+        maxLines: maxLines ?? (header ? 2 : 4),
         overflow: pw.TextOverflow.clip,
       ),
     );
@@ -898,9 +968,36 @@ class CompanyStatementUtil {
 
   static String _pdfText(String value) {
     if (value.isEmpty) return '';
-    final noNewLines = value.replaceAll('\n', ' ').replaceAll('\r', ' ');
-    final normalizedSpacing = noNewLines.replaceAll(RegExp(r'\s+'), ' ').trim();
-    return normalizedSpacing;
+
+    final normalizedLineBreaks = value
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n');
+
+    final lines = normalizedLineBreaks
+        .split('\n')
+        .map((line) => line.replaceAll(RegExp(r'\s+'), ' ').trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+
+    return lines.join('\n');
+  }
+
+  static String _optionalShipLine(String? shipName) {
+    final trimmed = (shipName ?? '').trim();
+    if (trimmed.isEmpty) return '';
+    return '\nShip: $trimmed';
+  }
+
+  static Future<String> _resolveOrganizationName(String fallback) async {
+    try {
+      if (!Get.isRegistered<FirestoreUserService>()) return fallback;
+
+      final userData = await Get.find<FirestoreUserService>().getUserDetails();
+      final org = userData.organization.trim();
+      return org.isEmpty ? fallback : org;
+    } catch (_) {
+      return fallback;
+    }
   }
 
   static String _formatType(String type) {

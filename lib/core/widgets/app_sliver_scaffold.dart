@@ -20,6 +20,7 @@ class AppSliverScaffold extends StatelessWidget {
     this.showBackButton = true,
     this.floatingActionButton,
     this.drawer,
+    this.scrollController,
   });
 
   final String title;
@@ -35,6 +36,7 @@ class AppSliverScaffold extends StatelessWidget {
   final bool showBackButton;
   final Widget? floatingActionButton;
   final Widget? drawer;
+  final ScrollController? scrollController;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +46,7 @@ class AppSliverScaffold extends StatelessWidget {
       drawer: drawer,
       floatingActionButton: floatingActionButton,
       body: CustomScrollView(
+        controller: scrollController,
         physics: const AlwaysScrollableScrollPhysics(
           parent: BouncingScrollPhysics(),
         ),
@@ -88,6 +91,7 @@ class AppSliverScaffold extends StatelessWidget {
         onRefresh: onRefresh!,
         color: AppColors.primary,
         child: CustomScrollView(
+          controller: scrollController,
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
           ),

@@ -8,6 +8,8 @@ import '../../../../core/services/firestore_services/shipdata_service.dart';
 import '../../../../core/services/firestore_services/transactiondata_service.dart';
 import '../../../../core/services/firestore_services/tripdata_service.dart';
 import '../../../../core/themes/themes.dart';
+import '../../../../core/widgets/widgets.dart';
+import '../../../home/home_controller.dart';
 import '../../../company/models/company_model.dart';
 import '../../../ship/models/ship_model.dart';
 import '../../../trip/models/trip_model.dart' show TripModel;
@@ -156,6 +158,32 @@ class AddTransactionController extends GetxController {
     } finally {
       isDeletingMethod.value = false;
     }
+  }
+
+  Future<void> onDeleteTransactionMethodPressed(
+    BuildContext context,
+    String method,
+  ) async {
+    final deleted = await showPasswordConfirmDeletionDialog(
+      context: context,
+      title: 'Delete Transaction Method',
+      message: 'Enter your password to delete "$method".',
+      onConfirm: (password) => deleteTransactionMethodWithPassword(
+        method: method,
+        password: password,
+      ),
+    );
+
+    if (!deleted) return;
+
+    Get.snackbar(
+      'Method Deleted',
+      'Transaction method deleted successfully.',
+      snackPosition: SnackPosition.TOP,
+      backgroundColor: AppColors.successLight,
+      colorText: AppColors.success,
+      icon: const Icon(Icons.check_circle_rounded, color: AppColors.success),
+    );
   }
 
   FormFieldValidator<String> requiredValidator(String fieldLabel) {
@@ -389,6 +417,9 @@ class AddTransactionController extends GetxController {
       await loadShips();
       await loadTrips();
       await loadTransactions();
+      if (Get.isRegistered<HomeController>()) {
+        await Get.find<HomeController>().loadHomeData();
+      }
       Get.back();
       Get.snackbar(
         'Transaction Added',
@@ -485,7 +516,8 @@ class AddTransactionController extends GetxController {
         .where(
           (transaction) =>
               _normalize(transaction.companyAndShipInfo.companyName ?? '') ==
-              _normalize(companyName),
+                  _normalize(companyName) &&
+              transaction.transactionType.trim().toLowerCase() == 'payment',
         )
         .fold<double>(
           0,
@@ -518,7 +550,21 @@ class AddTransactionController extends GetxController {
         .where(
           (transaction) =>
               _normalize(transaction.companyAndShipInfo.companyName ?? '') ==
-              _normalize(companyName),
+                  _normalize(companyName) &&
+              transaction.transactionType.trim().toLowerCase() == 'payment',
+        )
+        .fold<double>(
+          0,
+          (sum, transaction) => sum + _toDouble(transaction.amount),
+        );
+
+    final fallbackCompanyDueExpenses = transactions
+        .where(
+          (transaction) =>
+              _normalize(transaction.companyAndShipInfo.companyName ?? '') ==
+                  _normalize(companyName) &&
+              transaction.transactionType.trim().toLowerCase() == 'expenses' &&
+              transaction.expenseSource.trim().toLowerCase() == 'company',
         )
         .fold<double>(
           0,
@@ -528,7 +574,7 @@ class AddTransactionController extends GetxController {
     final billed = storedBilled > 0 ? storedBilled : fallbackBilled;
     final received = storedReceived > 0 ? storedReceived : fallbackReceived;
 
-    return billed - received;
+    return billed - received - fallbackCompanyDueExpenses;
   }
 
   double _toDouble(dynamic value) {
