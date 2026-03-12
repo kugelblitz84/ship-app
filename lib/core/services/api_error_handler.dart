@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:mailer/mailer.dart';
@@ -34,7 +35,7 @@ class ApiErrorHandler {
         _ => e.message ?? "Failed",
       };
       if (showErrorSnackbar && !_shouldSuppressOfflineSnackbar) {
-        Get.snackbar(
+        showAppSnackbar(
           'Error',
           errorMsg,
           backgroundColor: AppColors.errorLight,
@@ -54,12 +55,12 @@ class ApiErrorHandler {
         _ => e.message ?? fallbackMessage,
       };
       if (showErrorSnackbar && !_shouldSuppressOfflineSnackbar) {
-        Get.snackbar('Error', errorMsg);
+        showAppSnackbar('Error', errorMsg);
       }
       return ApiResponse<T>(error: errorMsg, isSuccess: false);
     } catch (_) {
       if (showErrorSnackbar && !_shouldSuppressOfflineSnackbar) {
-        Get.snackbar('Error', fallbackMessage);
+        showAppSnackbar('Error', fallbackMessage);
       }
       return ApiResponse<T>(error: fallbackMessage, isSuccess: false);
     }
@@ -103,7 +104,7 @@ class OtpMailerErrorHandler {
       }
 
       if (showErrorSnackbar && !_shouldSuppressOfflineSnackbar) {
-        Get.snackbar(
+        showAppSnackbar(
           'OTP Error',
           errorMsg,
           backgroundColor: AppColors.errorLight,
@@ -117,7 +118,7 @@ class OtpMailerErrorHandler {
       debugPrintStack(stackTrace: stackTrace);
 
       if (showErrorSnackbar && !_shouldSuppressOfflineSnackbar) {
-        Get.snackbar(
+        showAppSnackbar(
           'OTP Error',
           errorMsg,
           backgroundColor: AppColors.errorLight,
@@ -128,3 +129,4 @@ class OtpMailerErrorHandler {
     }
   }
 }
+

@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import '../../../core/services/api_error_handler.dart';
 import '../../../core/services/firestore_services/companydata_service.dart';
 import '../../../core/services/firestore_services/shipdata_service.dart';
@@ -240,11 +241,11 @@ class AddTripController extends GetxController {
     if (_isLoading.value) return;
     if (!(formKey.currentState?.validate() ?? false)) return;
     if (selectedCompanyAndShip == null) {
-      Get.snackbar('Error', 'Please select company and ship');
+      showAppSnackbar('Error', 'Please select company and ship');
       return;
     }
     if (totalBillController.text.trim().isEmpty) {
-      Get.snackbar('Error', 'Enter valid rate and quantity');
+      showAppSnackbar('Error', 'Enter valid rate and quantity');
       return;
     }
 
@@ -256,15 +257,15 @@ class AddTripController extends GetxController {
       final description = productDescriptionController.text.trim();
 
       if (productName.isEmpty) {
-        Get.snackbar('Error', 'Product name is required');
+        showAppSnackbar('Error', 'Product name is required');
         return;
       }
       if (quantity.isEmpty || _tryParseAmount(quantity) == null) {
-        Get.snackbar('Error', 'Quantity is required');
+        showAppSnackbar('Error', 'Quantity is required');
         return;
       }
       if (unit.isEmpty) {
-        Get.snackbar('Error', 'Unit is required');
+        showAppSnackbar('Error', 'Unit is required');
         return;
       }
 
@@ -317,7 +318,7 @@ class AddTripController extends GetxController {
 
       clear();
       Get.back();
-      Get.snackbar(
+      showAppSnackbar(
         'Trip Added',
         '${trip.from} to ${trip.to} has been added successfully.',
         snackPosition: SnackPosition.TOP,
@@ -362,3 +363,4 @@ class AddTripController extends GetxController {
     selectedShipName.value = null;
   }
 }
+

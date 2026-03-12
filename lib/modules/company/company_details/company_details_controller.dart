@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
@@ -246,7 +247,7 @@ class CompanyDetailsController extends GetxController {
     final filteredTransactions = _filteredTransactions();
 
     if (filteredTrips.isEmpty && filteredTransactions.isEmpty) {
-      Get.snackbar(
+      showAppSnackbar(
         'No data in selected period',
         'No statement records found for the selected filter.',
         colorText: Colors.white,
@@ -366,7 +367,7 @@ class CompanyDetailsController extends GetxController {
 
       currentCompany.description = updatedDescription;
       isEditing.value = false;
-      Get.snackbar('Success', 'Company details updated successfully.');
+      showAppSnackbar('Success', 'Company details updated successfully.');
     } finally {
       isSaving.value = false;
     }
@@ -378,7 +379,7 @@ class CompanyDetailsController extends GetxController {
 
     final trimmedPassword = password.trim();
     if (trimmedPassword.isEmpty) {
-      Get.snackbar('Error', 'Password is required');
+      showAppSnackbar('Error', 'Password is required');
       return false;
     }
 
@@ -424,7 +425,7 @@ class CompanyDetailsController extends GetxController {
 
     final trimmedPassword = password.trim();
     if (trimmedPassword.isEmpty) {
-      Get.snackbar('Error', 'Password is required');
+      showAppSnackbar('Error', 'Password is required');
       return false;
     }
 
@@ -472,7 +473,7 @@ class CompanyDetailsController extends GetxController {
 
     if (!deleted) return;
 
-    Get.snackbar('Success', 'Transaction deleted successfully.');
+    showAppSnackbar('Success', 'Transaction deleted successfully.');
     await loadCompanyDetails();
   }
 
@@ -646,3 +647,4 @@ class CompanyDetailsController extends GetxController {
     return null;
   }
 }
+

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:get/get.dart';
 
 import '../../../core/services/api_error_handler.dart';
@@ -106,7 +107,7 @@ class ShipDetailsController extends GetxController {
 
       currentShip.licenseNumber = updatedLicense;
       isEditing.value = false;
-      Get.snackbar('Success', 'Ship details updated successfully.');
+      showAppSnackbar('Success', 'Ship details updated successfully.');
     } finally {
       isSaving.value = false;
     }
@@ -118,7 +119,7 @@ class ShipDetailsController extends GetxController {
 
     final trimmedPassword = password.trim();
     if (trimmedPassword.isEmpty) {
-      Get.snackbar('Error', 'Password is required');
+      showAppSnackbar('Error', 'Password is required');
       return false;
     }
 
@@ -174,3 +175,4 @@ class ShipDetailsController extends GetxController {
     return value.trim().toLowerCase();
   }
 }
+

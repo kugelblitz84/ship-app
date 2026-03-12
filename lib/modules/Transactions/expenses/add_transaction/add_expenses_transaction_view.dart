@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 
@@ -451,12 +452,16 @@ class AddExpensesTransactionView
       ),
     );
 
-    methodController.dispose();
+    // Defer disposal to the next frame so the dialog's TextField has fully
+    // detached from the widget tree before the controller is disposed.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      methodController.dispose();
+    });
 
     // Update reactive state only after dialog is fully removed from tree.
     if (savedMethod != null) {
       controller.applyTransactionMethod(savedMethod!);
-      Get.snackbar(
+      showAppSnackbar(
         'Method Added',
         'Expense method added successfully.',
         snackPosition: SnackPosition.TOP,
@@ -590,3 +595,4 @@ class AddExpensesTransactionView
     );
   }
 }
+

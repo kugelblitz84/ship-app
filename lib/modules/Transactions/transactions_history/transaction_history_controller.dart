@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -10,7 +11,7 @@ import '../../../core/widgets/widgets.dart';
 import '../../../modules/home/home_controller.dart';
 import '../../../routes/app_routes.dart';
 import '../models/transaction_model.dart';
-import '../utils/expenses_hostory_util.dart';
+import '../utils/transaction_ledger_util.dart';
 
 enum TransactionSortOption {
   newest,
@@ -45,6 +46,7 @@ class TransactionHistoryController extends GetxController {
   final RxInt selectedMonth = 0.obs;
   final RxInt selectedYear = 0.obs;
   final RxString selectedCompany = ''.obs;
+  final RxString selectedShip = ''.obs;
   final Rxn<DateTime> selectedDate = Rxn<DateTime>();
   final Rx<TransactionSortOption> sortOption = TransactionSortOption.newest.obs;
   final RxBool showExpensesOnly = false.obs;
@@ -135,7 +137,7 @@ class TransactionHistoryController extends GetxController {
 
     final trimmedPassword = password.trim();
     if (trimmedPassword.isEmpty) {
-      Get.snackbar('Error', 'Password is required');
+      showAppSnackbar('Error', 'Password is required');
       return false;
     }
 
@@ -184,7 +186,7 @@ class TransactionHistoryController extends GetxController {
 
     if (!deleted) return;
 
-    Get.snackbar('Success', 'Transaction deleted successfully.');
+    showAppSnackbar('Success', 'Transaction deleted successfully.');
     await loadTransactions(showLoader: false, reset: true);
   }
 
@@ -204,6 +206,7 @@ class TransactionHistoryController extends GetxController {
     final month = selectedMonth.value;
     final year = selectedYear.value;
     final selectedCompanyFilter = selectedCompany.value.trim().toLowerCase();
+    final selectedShipFilter = selectedShip.value.trim().toLowerCase();
     final dateFilter = selectedDate.value;
 
     final filtered = transactions.where((transaction) {
@@ -221,6 +224,11 @@ class TransactionHistoryController extends GetxController {
       final company = transaction.companyName.trim().toLowerCase();
       final companyFilterMatch =
           selectedCompanyFilter.isEmpty || company == selectedCompanyFilter;
+      final ship = (transaction.companyAndShipInfo.shipName ?? '')
+          .trim()
+          .toLowerCase();
+      final shipFilterMatch =
+          selectedShipFilter.isEmpty || ship == selectedShipFilter;
       final expenseToggleMatch = _matchesExpenseToggleFilter(transaction);
       final paymentMethod = transaction.paymentMethodLabel.toLowerCase();
       final amount = transaction.amount.toLowerCase();
@@ -232,6 +240,7 @@ class TransactionHistoryController extends GetxController {
       final searchMatch =
           query.isEmpty ||
           company.contains(query) ||
+          ship.contains(query) ||
           paymentMethod.contains(query) ||
           amount.contains(query) ||
           type.contains(query) ||
@@ -243,6 +252,7 @@ class TransactionHistoryController extends GetxController {
           yearMatch &&
           dateMatch &&
           companyFilterMatch &&
+          shipFilterMatch &&
           expenseToggleMatch &&
           searchMatch;
     }).toList();
@@ -280,6 +290,7 @@ class TransactionHistoryController extends GetxController {
       selectedMonth.value != 0 ||
       selectedYear.value != 0 ||
       selectedCompany.value.trim().isNotEmpty ||
+      selectedShip.value.trim().isNotEmpty ||
       selectedDate.value != null ||
       showExpensesOnly.value ||
       !includeAddedToDueExpenses.value ||
@@ -309,6 +320,22 @@ class TransactionHistoryController extends GetxController {
     return companies;
   }
 
+  List<String> get availableShips {
+    final ships =
+        transactions
+            .map(
+              (transaction) =>
+                  (transaction.companyAndShipInfo.shipName ?? '').trim(),
+            )
+            .where((name) => name.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort(
+            (left, right) => left.toLowerCase().compareTo(right.toLowerCase()),
+          );
+    return ships;
+  }
+
   void onSortChanged(TransactionSortOption? value) {
     if (value == null) return;
     sortOption.value = value;
@@ -324,6 +351,10 @@ class TransactionHistoryController extends GetxController {
 
   void onCompanyChanged(String? company) {
     selectedCompany.value = (company ?? '').trim();
+  }
+
+  void onShipChanged(String? ship) {
+    selectedShip.value = (ship ?? '').trim();
   }
 
   void setDateFilter(DateTime? date) {
@@ -355,6 +386,7 @@ class TransactionHistoryController extends GetxController {
     selectedMonth.value = 0;
     selectedYear.value = 0;
     selectedCompany.value = '';
+    selectedShip.value = '';
     selectedDate.value = null;
     showExpensesOnly.value = false;
     includeAddedToDueExpenses.value = true;
@@ -365,17 +397,58 @@ class TransactionHistoryController extends GetxController {
   Future<void> exportFilteredLedgerPdf() async {
     final ledgerTransactions = visibleTransactions;
     if (ledgerTransactions.isEmpty) {
-      Get.snackbar(
+      showAppSnackbar(
         'No Transactions',
         'No filtered transactions found to export ledger.',
       );
       return;
     }
 
-    await TransactionLedgerHistoryUtil.saveTransactionLedgerAndNotify(
+    await TransactionLedgerUtil.saveTransactionLedgerAndNotify(
       ledgerTransactions,
       dateFilterLabel: _activeDateFilterLabel(),
+      appliedFiltersLabel: _activeFiltersHeaderLabel(),
     );
+  }
+
+  String _activeFiltersHeaderLabel() {
+    final parts = <String>['${_activeDateFilterLabel()}'];
+
+    final company = selectedCompany.value.trim();
+    if (company.isNotEmpty) {
+      parts.add('$company');
+    }
+
+    final ship = selectedShip.value.trim();
+    if (ship.isNotEmpty) {
+      parts.add('$ship');
+    }
+
+    final query = searchQuery.value.trim();
+    if (query.isNotEmpty) {
+      parts.add('$query');
+    }
+
+    if (showExpensesOnly.value) {
+      final includeDue = includeAddedToDueExpenses.value;
+      final includeMainBalance = includeMainBalanceExpenses.value;
+
+      if (includeDue && includeMainBalance) {
+        parts.add('Expense Source: Company Due + Main Balance');
+      } else if (includeDue) {
+        parts.add('Expense Source: Company Due');
+      } else if (includeMainBalance) {
+        parts.add('Expense Source: Main Balance');
+      } else {
+        parts.add('Expense Source: None');
+      }
+    }
+
+    if (sortOption.value != TransactionSortOption.newest) {
+      parts.add('Sort: ${_sortOptionLabel(sortOption.value)}');
+    }
+
+    return parts.join(' | ');
   }
 
   String _activeDateFilterLabel() {
@@ -402,6 +475,23 @@ class TransactionHistoryController extends GetxController {
     }
 
     return 'All dates';
+  }
+
+  String _sortOptionLabel(TransactionSortOption option) {
+    switch (option) {
+      case TransactionSortOption.newest:
+        return 'Newest first';
+      case TransactionSortOption.oldest:
+        return 'Oldest first';
+      case TransactionSortOption.amountHighToLow:
+        return 'Amount high to low';
+      case TransactionSortOption.amountLowToHigh:
+        return 'Amount low to high';
+      case TransactionSortOption.companyAZ:
+        return 'Company A-Z';
+      case TransactionSortOption.companyZA:
+        return 'Company Z-A';
+    }
   }
 
   DateTime get initialDateForPicker => selectedDate.value ?? DateTime.now();
@@ -502,3 +592,4 @@ class TransactionHistoryController extends GetxController {
     }
   }
 }
+

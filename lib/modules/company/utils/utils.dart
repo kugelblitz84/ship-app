@@ -17,6 +17,13 @@ import '../models/company_model.dart';
 class CompanyStatementUtil {
   CompanyStatementUtil._();
 
+  static const int _maxLedgerEntriesPerPage = 6;
+  static const double _estimatedLedgerHeaderHeight = 26;
+  static const double _estimatedLedgerRowHeight = 24;
+  static const double _estimatedClosingBoxHeight = 92;
+  static const double _estimatedNotesBlockHeight = 88;
+  static const double _estimatedTrailingGapHeight = 24;
+
   static final DownloadService _downloadService = createDownloadService();
 
   static Future<void> generateAndSavePdf({
@@ -35,6 +42,7 @@ class CompanyStatementUtil {
     required CompanyModel company,
     required List<trip_models.TripModel> trips,
     required List<tx_models.TransactionModel> transactions,
+    String? appliedFiltersLabel,
   }) async {
     final context = Get.context;
     if (context == null) return;
@@ -50,6 +58,7 @@ class CompanyStatementUtil {
         company: company,
         trips: trips,
         transactions: transactions,
+        appliedFiltersLabel: appliedFiltersLabel,
       );
 
       if (context.mounted) {
@@ -78,11 +87,13 @@ class CompanyStatementUtil {
     required CompanyModel company,
     required List<trip_models.TripModel> trips,
     required List<tx_models.TransactionModel> transactions,
+    String? appliedFiltersLabel,
   }) async {
     final bytes = await buildCompanyStatementPdf(
       company: company,
       trips: trips,
       transactions: transactions,
+      appliedFiltersLabel: appliedFiltersLabel,
     );
 
     final file = GeneratedFileData(
@@ -148,6 +159,7 @@ class CompanyStatementUtil {
     required CompanyModel company,
     required List<trip_models.TripModel> trips,
     required List<tx_models.TransactionModel> transactions,
+    String? appliedFiltersLabel,
   }) async {
     final ledger = _buildLedger(trips, transactions);
     final generatedAt = DateTime.now();
@@ -168,6 +180,10 @@ class CompanyStatementUtil {
             ledger.entries.first.displayDate,
             ledger.entries.last.displayDate,
           );
+    final resolvedAppliedFilters = (appliedFiltersLabel ?? '').trim().isEmpty
+        ? '${_safe(company.name)} | Date Range: ${dateRange.from} to ${dateRange.to}'
+        : appliedFiltersLabel!.trim();
+    final entryChunks = _chunkLedgerEntries(ledger.entries);
 
     pdf.addPage(
       pw.MultiPage(
@@ -186,7 +202,7 @@ class CompanyStatementUtil {
           _buildHeader(
             generatedAt: generatedAt,
             organizationName: organizationName,
-            companyName: companyName,
+            appliedFiltersLabel: resolvedAppliedFilters,
           ),
           pw.SizedBox(height: 14),
           _buildCompanyInfoSection(
@@ -204,7 +220,23 @@ class CompanyStatementUtil {
           pw.SizedBox(height: 14),
           _buildLedgerTitle(),
           pw.SizedBox(height: 8),
-          _buildLedgerTable(ledger),
+          for (var i = 0; i < entryChunks.length; i++) ...[
+            if (i > 0) pw.NewPage(),
+            if (i == entryChunks.length - 1)
+              pw.NewPage(
+                freeSpace: _estimateTrailingLedgerSectionHeight(
+                  trailingRowCount: entryChunks[i].length,
+                  includeClosingRow: true,
+                  includeClosingBox: true,
+                ),
+              ),
+            _buildLedgerTable(
+              ledger,
+              entries: entryChunks[i],
+              includeClosingRow: i == entryChunks.length - 1,
+            ),
+            if (i < entryChunks.length - 1) pw.SizedBox(height: 8),
+          ],
           pw.SizedBox(height: 12),
           _buildClosingBox(
             totalDebit: _currency(ledger.totalDebit),
@@ -234,7 +266,7 @@ class CompanyStatementUtil {
   static pw.Widget _buildHeader({
     required DateTime generatedAt,
     required String organizationName,
-    required String companyName,
+    required String appliedFiltersLabel,
   }) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(16),
@@ -259,10 +291,10 @@ class CompanyStatementUtil {
                 ),
               ),
               pw.SizedBox(height: 6),
-              pw.Text(
-                companyName,
-                style: const pw.TextStyle(color: PdfColors.white, fontSize: 11),
-              ),
+              // pw.Text(
+              //   companyName,
+              //   style: const pw.TextStyle(color: PdfColors.white, fontSize: 11),
+              // ),
               pw.SizedBox(height: 3),
               pw.Text(
                 'Debit / Credit / Balance Ledger',
@@ -282,6 +314,8 @@ class CompanyStatementUtil {
               ),
               pw.SizedBox(height: 4),
               _metaText('Source', 'MarineLedger App'),
+              pw.SizedBox(height: 4),
+              _metaText('Filters', appliedFiltersLabel),
             ],
           ),
         ],
@@ -421,11 +455,17 @@ class CompanyStatementUtil {
     );
   }
 
-  static pw.Widget _buildLedgerTable(_LedgerBuildResult ledger) {
+  static pw.Widget _buildLedgerTable(
+    _LedgerBuildResult ledger, {
+    List<_LedgerEntry>? entries,
+    bool includeClosingRow = true,
+  }) {
+    final rowsToRender = entries ?? ledger.entries;
     final rows = <pw.TableRow>[];
 
     rows.add(
       pw.TableRow(
+        repeat: true,
         decoration: const pw.BoxDecoration(color: PdfColors.blueGrey50),
         children: [
           _cell('ID', header: true),
@@ -439,7 +479,7 @@ class CompanyStatementUtil {
       ),
     );
 
-    if (ledger.entries.isEmpty) {
+    if (rowsToRender.isEmpty) {
       rows.add(
         pw.TableRow(
           children: [
@@ -455,7 +495,7 @@ class CompanyStatementUtil {
       );
     }
 
-    for (final entry in ledger.entries) {
+    for (final entry in rowsToRender) {
       rows.add(
         pw.TableRow(
           children: [
@@ -471,25 +511,37 @@ class CompanyStatementUtil {
       );
     }
 
-    rows.add(
-      pw.TableRow(
-        decoration: const pw.BoxDecoration(color: PdfColors.blueGrey900),
-        children: [
-          _cell('', color: PdfColors.white),
-          _cell('', color: PdfColors.white),
-          _cell('Closing Balance', color: PdfColors.white, bold: true),
-          _cell('', color: PdfColors.white),
-          _cell('', right: true, color: PdfColors.white),
-          _cell('', right: true, color: PdfColors.white),
-          _cell(
-            _currency(ledger.closingBalance),
-            right: true,
-            color: PdfColors.white,
-            bold: true,
-          ),
-        ],
-      ),
-    );
+    if (includeClosingRow) {
+      rows.add(
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.blueGrey900),
+          children: [
+            _cell('', color: PdfColors.white),
+            _cell('', color: PdfColors.white),
+            _cell('Closing Balance', color: PdfColors.white, bold: true),
+            _cell('', color: PdfColors.white),
+            _cell(
+              _currency(ledger.totalDebit),
+              right: true,
+              color: PdfColors.white,
+              bold: true,
+            ),
+            _cell(
+              _currency(ledger.totalCredit),
+              right: true,
+              color: PdfColors.white,
+              bold: true,
+            ),
+            _cell(
+              _currency(ledger.closingBalance),
+              right: true,
+              color: PdfColors.white,
+              bold: true,
+            ),
+          ],
+        ),
+      );
+    }
 
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
@@ -504,6 +556,45 @@ class CompanyStatementUtil {
       },
       children: rows,
     );
+  }
+
+  static double _estimateTrailingLedgerSectionHeight({
+    required int trailingRowCount,
+    required bool includeClosingRow,
+    required bool includeClosingBox,
+  }) {
+    final rowCount = trailingRowCount <= 0 ? 1 : trailingRowCount;
+    final closingRows = includeClosingRow ? 1 : 0;
+
+    var height =
+        _estimatedLedgerHeaderHeight +
+        ((rowCount + closingRows) * _estimatedLedgerRowHeight) +
+        _estimatedTrailingGapHeight +
+        _estimatedNotesBlockHeight;
+
+    if (includeClosingBox) {
+      height += _estimatedClosingBoxHeight;
+    }
+
+    return height;
+  }
+
+  static List<List<_LedgerEntry>> _chunkLedgerEntries(
+    List<_LedgerEntry> entries,
+  ) {
+    if (entries.isEmpty) {
+      return [<_LedgerEntry>[]];
+    }
+
+    final chunks = <List<_LedgerEntry>>[];
+    for (var i = 0; i < entries.length; i += _maxLedgerEntriesPerPage) {
+      var end = i + _maxLedgerEntriesPerPage;
+      if (end > entries.length) {
+        end = entries.length;
+      }
+      chunks.add(entries.sublist(i, end));
+    }
+    return chunks;
   }
 
   static pw.Widget _buildClosingBox({
@@ -599,6 +690,10 @@ class CompanyStatementUtil {
     }
 
     for (final tx in transactions) {
+      if (_isTripTransaction(tx)) {
+        continue;
+      }
+
       if (_isMainBalanceExpense(tx)) {
         continue;
       }
@@ -705,7 +800,7 @@ class CompanyStatementUtil {
         ? quantity
         : '$quantity $unit';
 
-    return '\nRate: $rateText\nAmount: $productAmountText';
+    return '\nRate: $rateText\nQuantity: $productAmountText';
   }
 
   static String _tripProductWithDescription(trip_models.TripModel trip) {
@@ -729,7 +824,7 @@ class CompanyStatementUtil {
     //   return _pdfText(pricingDetails.trim());
     // }
 
-    return '-';
+    return _pdfText('Name: N/A\nDescription: N/A');
   }
 
   static String _paymentDescription(
@@ -737,25 +832,22 @@ class CompanyStatementUtil {
     Map<String, trip_models.TripModel> tripById,
   ) {
     final method = _formatType(tx.type);
-    final trip = tx.tripId.trim().isEmpty ? null : tripById[tx.tripId.trim()];
-    final pricingDetails = trip == null ? '' : _tripPricingDetails(trip);
     final company = _safe(tx.companyAndShipInfo.companyName ?? 'N/A');
     final shipPart = _optionalShipLine(tx.companyAndShipInfo.shipName);
     final route = tx.hasTrip ? _pdfText(tx.routeLabel) : '';
     final routePart = route.isNotEmpty ? '\nRoute: $route' : '';
-    return _pdfText(
-      'Payment ($method)$routePart\nCompany: $company$shipPart\n$pricingDetails',
-    );
+    return _pdfText('Payment ($method)$routePart\nCompany: $company$shipPart');
   }
 
   static String _dueExpenseDescription(tx_models.TransactionModel tx) {
     final company = _safe(tx.companyAndShipInfo.companyName ?? 'N/A');
-    final source = _formatType(tx.expenseSource);
+    // final source = _formatType(tx.expenseSource);
+    final method = _formatType(tx.type);
     final shipPart = _optionalShipLine(tx.companyAndShipInfo.shipName);
     final route = tx.hasTrip ? _pdfText(tx.routeLabel) : '';
     final routePart = route.isNotEmpty ? '\nRoute: $route' : '';
     return _pdfText(
-      'Due Expense ($source)$routePart\nCompany: $company$shipPart',
+      'Due Expense ($method)$routePart\nCompany: $company$shipPart',
     );
   }
 
@@ -764,9 +856,6 @@ class CompanyStatementUtil {
     Map<String, trip_models.TripModel> tripById,
   ) {
     final desc = (tx.description ?? '').trim();
-    if (desc.isNotEmpty) {
-      return _pdfText(desc);
-    }
 
     final tripId = tx.tripId.trim();
     if (tripId.isNotEmpty) {
@@ -776,7 +865,8 @@ class CompanyStatementUtil {
       }
     }
 
-    return '-';
+    final resolvedDescription = desc.isEmpty ? 'N/A' : desc;
+    return _pdfText('Name: N/A\nDescription: $resolvedDescription');
   }
 
   static pw.Widget _metaText(String label, String value) {
@@ -904,6 +994,10 @@ class CompanyStatementUtil {
     }
   }
 
+  static bool _isTripTransaction(tx_models.TransactionModel tx) {
+    return tx.transactionType.trim().toLowerCase() == 'trips';
+  }
+
   static bool _isExpense(tx_models.TransactionModel tx) {
     return tx.transactionType.trim().toLowerCase() == 'expenses';
   }
@@ -958,7 +1052,7 @@ class CompanyStatementUtil {
   }
 
   static String _currency(double amount) {
-    return 'BDT ${amount.toInt()}';
+    return '${amount.toInt()}';
   }
 
   static String _safe(String value) {

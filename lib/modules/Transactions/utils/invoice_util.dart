@@ -14,6 +14,10 @@ import '../models/transaction_model.dart';
 class InvoiceUtil {
   InvoiceUtil._();
 
+  static const double _estimatedInvoiceNotesBaseHeight = 74;
+  static const double _estimatedInvoiceNotesLineHeight = 12;
+  static const int _invoiceNotesCharsPerLineEstimate = 70;
+
   static final DownloadService _downloadService = createDownloadService();
 
   static Future<void> saveInvoiceAndNotify(TransactionModel transaction) async {
@@ -232,6 +236,9 @@ class InvoiceUtil {
     final totalFormatted = _currency(total);
     final totalPriceFormatted = _currency(totalPrice);
     final amountDueFormatted = _currency(amountDue);
+    final notesReserveHeight = _estimateInvoiceNotesHeight(
+      transaction.description,
+    );
 
     pdf.addPage(
       pw.MultiPage(
@@ -265,6 +272,7 @@ class InvoiceUtil {
             amountDue: amountDueFormatted,
           ),
           pw.SizedBox(height: 16),
+          pw.NewPage(freeSpace: notesReserveHeight),
           _buildNotesSection(transaction),
         ],
       ),
@@ -357,12 +365,12 @@ class InvoiceUtil {
   static pw.Widget _buildPaymentMetaRow(TransactionModel transaction) {
     final category = transaction.transactionType.trim().toLowerCase();
     final metaTitle = category == 'expenses'
-        ? 'Expense Source'
+        ? 'Source / Method'
         : category == 'trips'
         ? 'Record Type'
         : 'Payment Method';
     final metaValue = category == 'expenses'
-        ? _formatExpenseSource(transaction.expenseSource)
+        ? '${_formatExpenseSource(transaction.expenseSource)} / ${_formatType(transaction.type)}'
         : category == 'trips'
         ? 'Trip Entry'
         : _formatType(transaction.type);
@@ -392,19 +400,32 @@ class InvoiceUtil {
     required String amountFormatted,
   }) {
     final category = transaction.transactionType.trim().toLowerCase();
+    final isTripBill = category == 'trips';
+    final ship = _safe(transaction.companyAndShipInfo.shipName ?? '');
+    final shipPart = ship == 'N/A' ? '' : ' (Ship: $ship)';
     final itemDescription = category == 'expenses'
-        ? 'Transport expense (${_formatExpenseSource(transaction.expenseSource)}) for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)}'
+        ? 'Transport expense (${_formatExpenseSource(transaction.expenseSource)}) for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)}$shipPart'
         : category == 'trips'
-        ? 'Trip entry for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)}'
-        : 'Transport payment for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)} (${_formatType(transaction.type)})';
+        ? 'Trip entry for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)}$shipPart'
+        : 'Transport payment for ${_safe(transaction.tripFrom)} to ${_safe(transaction.tripTo)} (${_formatType(transaction.type)})$shipPart';
+    final quantityValue = _parseAmount(transaction.amount);
+    final totalPriceValue = _parseAmount(transaction.totalPrice);
+    final rateValue = quantityValue > 0 ? totalPriceValue / quantityValue : 0;
+    final quantityText = isTripBill
+        ? (quantityValue > 0 ? quantityValue.toStringAsFixed(0) : 'N/A')
+        : 'N/A';
+    final rateText = isTripBill
+        ? (rateValue > 0 ? _currency(rateValue.toDouble()) : 'N/A')
+        : 'N/A';
 
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
       columnWidths: {
         0: const pw.FlexColumnWidth(1.2),
-        1: const pw.FlexColumnWidth(4),
-        2: const pw.FlexColumnWidth(1.5),
-        3: const pw.FlexColumnWidth(1.5),
+        1: const pw.FlexColumnWidth(3.6),
+        2: const pw.FlexColumnWidth(1.6),
+        3: const pw.FlexColumnWidth(1.8),
+        4: const pw.FlexColumnWidth(1.6),
       },
       children: [
         pw.TableRow(
@@ -412,7 +433,8 @@ class InvoiceUtil {
           children: [
             _tableCell('Item', isHeader: true),
             _tableCell('Description', isHeader: true),
-            _tableCell('Qty', isHeader: true),
+            _tableCell('Quantity', isHeader: true),
+            _tableCell('Rate', isHeader: true, alignRight: true),
             _tableCell('Amount', isHeader: true, alignRight: true),
           ],
         ),
@@ -420,7 +442,8 @@ class InvoiceUtil {
           children: [
             _tableCell('1'),
             _tableCell(itemDescription),
-            _tableCell('1'),
+            _tableCell(quantityText),
+            _tableCell(rateText, alignRight: true),
             _tableCell(amountFormatted, alignRight: true),
           ],
         ),
@@ -487,6 +510,18 @@ class InvoiceUtil {
         ],
       ),
     );
+  }
+
+  static double _estimateInvoiceNotesHeight(String? description) {
+    final text = (description ?? '').trim();
+    if (text.isEmpty) {
+      return _estimatedInvoiceNotesBaseHeight;
+    }
+
+    final estimatedLines = (text.length / _invoiceNotesCharsPerLineEstimate)
+        .ceil();
+    return _estimatedInvoiceNotesBaseHeight +
+        (estimatedLines * _estimatedInvoiceNotesLineHeight);
   }
 
   static pw.Widget _metaText(String label, String value) {

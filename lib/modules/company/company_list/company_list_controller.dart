@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:urgent/core/services/api_error_handler.dart';
@@ -132,7 +133,7 @@ class CompanyListController extends GetxController {
     );
 
     if (!deleted) return;
-    Get.snackbar('Success', 'Company deleted successfully.');
+    showAppSnackbar('Success', 'Company deleted successfully.');
   }
 
   Future<void> onRefresh() async {
@@ -155,7 +156,7 @@ class CompanyListController extends GetxController {
     );
     await loadCompanies(showLoader: false, reset: true);
     if (result == true) {
-      Get.snackbar('Success', 'Company deleted successfully.');
+      showAppSnackbar('Success', 'Company deleted successfully.');
     }
   }
 
@@ -165,7 +166,7 @@ class CompanyListController extends GetxController {
   }) async {
     final trimmedPassword = password.trim();
     if (trimmedPassword.isEmpty) {
-      Get.snackbar('Error', 'Password is required');
+      showAppSnackbar('Error', 'Password is required');
       return false;
     }
 
@@ -339,3 +340,4 @@ class CompanyListController extends GetxController {
     }
   }
 }
+

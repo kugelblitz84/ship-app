@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 
@@ -94,6 +95,7 @@ class AddTransactionView extends GetView<AddTransactionController> {
                   AppTextField(
                     controller: controller.amountController,
                     label: 'Amount',
+                    hint: 'Enter payment amount',
                     prefixIcon: Icons.currency_exchange_rounded,
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
@@ -461,7 +463,7 @@ class AddTransactionView extends GetView<AddTransactionController> {
     // Update reactive state only after dialog is fully removed from tree.
     if (savedMethod != null) {
       controller.applyTransactionMethod(savedMethod!);
-      Get.snackbar(
+      showAppSnackbar(
         'Method Added',
         'Payment method added successfully.',
         snackPosition: SnackPosition.TOP,
@@ -555,3 +557,4 @@ class AddTransactionView extends GetView<AddTransactionController> {
     );
   }
 }
+

@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/services/api_error_handler.dart';
@@ -77,13 +78,13 @@ class AdminUsersController extends GetxController {
         }
       }
 
-      Get.snackbar(
+      showAppSnackbar(
         'Exported',
         'Users exported successfully.\n${savedFile.fileName}\n${savedFile.locationLabel}',
         snackPosition: SnackPosition.BOTTOM,
       );
     } catch (e) {
-      Get.snackbar(
+      showAppSnackbar(
         'Export failed',
         e.toString(),
         snackPosition: SnackPosition.BOTTOM,
@@ -114,3 +115,4 @@ class AdminUsersController extends GetxController {
     }
   }
 }
+

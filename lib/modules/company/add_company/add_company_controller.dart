@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:urgent/core/services/api_error_handler.dart';
 import 'package:urgent/core/services/firestore_services/companydata_service.dart';
@@ -47,7 +48,7 @@ class AddCompanyController extends GetxController {
       }
 
       Get.back();
-      Get.snackbar(
+      showAppSnackbar(
         'Company Added',
         '$companyName has been added.',
         snackPosition: SnackPosition.TOP,
@@ -72,3 +73,4 @@ class AddCompanyController extends GetxController {
     super.onClose();
   }
 }
+

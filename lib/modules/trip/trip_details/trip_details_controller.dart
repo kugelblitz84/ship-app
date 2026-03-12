@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:get/get.dart';
 
 import '../../../core/services/api_error_handler.dart';
@@ -128,7 +129,7 @@ class TripDetailsController extends GetxController {
       if (!response.isSuccess) return;
 
       isEditing.value = false;
-      Get.snackbar('Success', 'Trip details updated successfully.');
+      showAppSnackbar('Success', 'Trip details updated successfully.');
     } finally {
       isSaving.value = false;
     }
@@ -184,3 +185,4 @@ class TripDetailsController extends GetxController {
     super.onClose();
   }
 }
+

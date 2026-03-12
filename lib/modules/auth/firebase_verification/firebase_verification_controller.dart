@@ -1,64 +1,45 @@
 import 'package:get/get.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import '../../../core/services/api_error_handler.dart';
 import '../../../core/services/firebase_auth_service.dart';
+import '../../../core/services/firestore_services/user_access_service.dart';
 import '../../../routes/app_routes.dart';
 
 class FirebaseVerificationController extends GetxController {
   final AuthService _auth = Get.find<AuthService>();
+  final UserAccessService _userAccessService = Get.find<UserAccessService>();
   final RxBool isLoading = false.obs;
-  bool _didAutoSend = false;
   String get email => _auth.currentUser?.email ?? 'your email address';
 
   @override
   void onInit() {
     super.onInit();
-    _autoSendVerificationOnLoad();
-  }
-
-  Future<void> _autoSendVerificationOnLoad() async {
-    if (_didAutoSend) return;
-    _didAutoSend = true;
-
-    await ApiErrorHandler.call(
-      () => _auth.sendEmailVerification(),
-      showErrorSnackbar: false,
-    );
+    // Keep this route as a compatibility entry-point, but the actual
+    // verification flow is OTP-based.
   }
 
   Future<void> onResendPressed() async {
-    if (isLoading.value) return;
-
-    isLoading.value = true;
-    try {
-      final response = await ApiErrorHandler.call(
-        () => _auth.sendEmailVerification(),
-        fallbackMessage: 'Failed to resend verification email.',
-      );
-      if (!response.isSuccess) return;
-
-      Get.snackbar(
-        'Verification Sent',
-        'A new verification email has been sent.',
-      );
-    } finally {
-      isLoading.value = false;
-    }
+    Get.toNamed(AppRoutes.otpVerification, arguments: {'email': email});
   }
 
   Future<void> onIverifiedPressed() async {
     if (isLoading.value) return;
     isLoading.value = true;
     try {
+      final uid = _auth.currentUser?.uid ?? '';
       final response = await ApiErrorHandler.call(
-        () => _auth.reloadUser(),
+        () => _userAccessService.getCurrentUserAccessStatus(uid),
         fallbackMessage: 'Failed to check verification status.',
       );
-      if (!response.isSuccess) return;
+      if (!response.isSuccess || response.data == null) return;
 
-      if (_auth.currentUser?.emailVerified ?? false) {
+      if (response.data!.isVerified) {
         Get.offNamed(AppRoutes.postVerificationDetails);
       } else {
-        Get.snackbar('Not Verified', 'Please verify your email first.');
+        showAppSnackbar(
+          'Not Verified',
+          'Please complete OTP verification to continue.',
+        );
       }
     } finally {
       isLoading.value = false;
@@ -69,3 +50,4 @@ class FirebaseVerificationController extends GetxController {
     Get.offAllNamed(AppRoutes.login);
   }
 }
+

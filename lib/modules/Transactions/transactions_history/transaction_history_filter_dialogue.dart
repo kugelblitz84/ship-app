@@ -25,6 +25,7 @@ class TransactionHistoryFilterDialog extends StatelessWidget {
           child: Obx(() {
             final years = controller.availableYears;
             final companies = controller.availableCompanies;
+            final ships = controller.availableShips;
             final selectedYearValue =
                 controller.selectedYear.value == 0 ||
                     years.contains(controller.selectedYear.value)
@@ -34,6 +35,11 @@ class TransactionHistoryFilterDialog extends StatelessWidget {
                 controller.selectedCompany.value.trim().isEmpty ||
                     companies.contains(controller.selectedCompany.value)
                 ? controller.selectedCompany.value
+                : '';
+            final selectedShipValue =
+                controller.selectedShip.value.trim().isEmpty ||
+                    ships.contains(controller.selectedShip.value)
+                ? controller.selectedShip.value
                 : '';
 
             return SingleChildScrollView(
@@ -127,6 +133,34 @@ class TransactionHistoryFilterDialog extends StatelessWidget {
                       ),
                     ],
                     onChanged: controller.onCompanyChanged,
+                  ),
+                  SizedBox(height: AppSpacing.base),
+                  DropdownButtonFormField<String>(
+                    value: selectedShipValue,
+                    decoration: const InputDecoration(
+                      labelText: 'Ship',
+                      prefixIcon: Icon(Icons.directions_boat_rounded),
+                    ),
+                    borderRadius: AppRadius.md,
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: '',
+                        child: Text('All ships'),
+                      ),
+                      ...ships.map(
+                        (shipName) => DropdownMenuItem<String>(
+                          value: shipName,
+                          child: Text(
+                            shipName,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: controller.onShipChanged,
                   ),
                   SizedBox(height: AppSpacing.base),
                   // Container(
@@ -330,6 +364,15 @@ class TransactionHistoryFilterDialog extends StatelessWidget {
         _ActiveFilterChip(
           label: 'Company: ${controller.selectedCompany.value.trim()}',
           onRemove: () => controller.onCompanyChanged(null),
+        ),
+      );
+    }
+
+    if (controller.selectedShip.value.trim().isNotEmpty) {
+      chips.add(
+        _ActiveFilterChip(
+          label: 'Ship: ${controller.selectedShip.value.trim()}',
+          onRemove: () => controller.onShipChanged(null),
         ),
       );
     }

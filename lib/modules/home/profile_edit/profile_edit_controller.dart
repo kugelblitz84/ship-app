@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:get/get.dart';
 
 import '../../../core/services/api_error_handler.dart';
@@ -45,9 +46,7 @@ class ProfileEditController extends GetxController {
       final currentUser = _auth.currentUser;
       email.value = (currentUser?.email ?? data.email).trim();
 
-      final firestoreVerified = data.isVerified;
-      final firebaseVerified = currentUser?.emailVerified == true;
-      isVerified.value = firestoreVerified || firebaseVerified;
+      isVerified.value = data.isVerified;
     } finally {
       _isLoading.value = false;
     }
@@ -72,7 +71,7 @@ class ProfileEditController extends GetxController {
         await Get.find<HomeController>().loadHomeData();
       }
 
-      Get.snackbar('Profile Updated', 'Your profile details have been saved.');
+      showAppSnackbar('Profile Updated', 'Your profile details have been saved.');
     } finally {
       _isLoading.value = false;
     }
@@ -98,3 +97,4 @@ class ProfileEditController extends GetxController {
     super.onClose();
   }
 }
+

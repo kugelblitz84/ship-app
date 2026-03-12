@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 
@@ -13,7 +14,7 @@ class ResetPasswordController extends GetxController {
   void onResetPressed() {
     if (formKey.currentState?.validate() ?? false) {
       Get.offAllNamed(AppRoutes.login);
-      Get.snackbar(
+      showAppSnackbar(
         'Password Reset Successful',
         'You can now sign in with your new password',
         snackPosition: SnackPosition.BOTTOM,
@@ -46,3 +47,4 @@ class ResetPasswordController extends GetxController {
     super.onClose();
   }
 }
+

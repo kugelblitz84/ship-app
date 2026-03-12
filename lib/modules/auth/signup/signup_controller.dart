@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import '../../../core/services/api_error_handler.dart';
 import '../../../routes/app_routes.dart';
@@ -39,7 +40,7 @@ class SignupController extends GetxController {
         if (!flagResponse.isSuccess) return;
 
         final email = emailController.text.trim();
-        Get.snackbar(
+        showAppSnackbar(
           'Success',
           'Account created. Enter the OTP sent to your email.',
         );
@@ -57,3 +58,4 @@ class SignupController extends GetxController {
     super.onClose();
   }
 }
+

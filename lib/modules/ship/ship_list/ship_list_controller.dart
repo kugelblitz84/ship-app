@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -20,7 +21,7 @@ class ShipListController extends GetxController {
   final AuthService _authService = Get.find<AuthService>();
   final ScrollController scrollController = ScrollController();
 
-  final RxBool _isLoading = true.obs;
+  final RxBool _isLoading = false.obs;
   bool get isLoading => _isLoading.value;
   final RxBool _isLoadingMore = false.obs;
   bool get isLoadingMore => _isLoadingMore.value;
@@ -116,7 +117,7 @@ class ShipListController extends GetxController {
     final result = await Get.toNamed(AppRoutes.shipDetails, arguments: ship);
     await loadShips(showLoader: false, reset: true);
     if (result == true) {
-      Get.snackbar('Success', 'Ship deleted successfully.');
+      showAppSnackbar('Success', 'Ship deleted successfully.');
     }
   }
 
@@ -126,7 +127,7 @@ class ShipListController extends GetxController {
   }) async {
     final trimmedPassword = password.trim();
     if (trimmedPassword.isEmpty) {
-      Get.snackbar('Error', 'Password is required');
+      showAppSnackbar('Error', 'Password is required');
       return false;
     }
 
@@ -163,7 +164,7 @@ class ShipListController extends GetxController {
     );
 
     if (!deleted) return;
-    Get.snackbar('Success', 'Ship deleted successfully.');
+    showAppSnackbar('Success', 'Ship deleted successfully.');
   }
 
   List<ShipModel> get visibleShips {
@@ -242,3 +243,4 @@ class ShipListController extends GetxController {
     }
   }
 }
+

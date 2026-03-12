@@ -52,7 +52,7 @@ class UserAccessService extends GetxService {
   }
 
   Future<UserAccessStatus> getCurrentUserAccessStatus(String uid) async {
-    const fallback = UserAccessStatus(isBlocked: false, isVerified: true);
+    const fallback = UserAccessStatus(isBlocked: false, isVerified: false);
     if (uid.isEmpty) return fallback;
 
     final directSnapshot = await _userRef(uid).get();
@@ -256,13 +256,13 @@ class UserAccessService extends GetxService {
   }
 
   bool _isVerifiedValue(dynamic value) {
-    if (value == null) return true;
+    if (value == null) return false;
     if (value == true) return true;
     if (value is num) return value != 0;
     if (value is String) {
       final normalized = value.trim().toLowerCase();
       return normalized == 'true' || normalized == '1' || normalized == 'yes';
     }
-    return true;
+    return false;
   }
 }

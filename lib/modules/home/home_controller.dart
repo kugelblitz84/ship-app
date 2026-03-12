@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import '../../core/bootstrap/bootstrap_controller.dart';
@@ -352,7 +353,7 @@ class HomeController extends GetxController {
   }) async {
     final trimmedPassword = password.trim();
     if (trimmedPassword.isEmpty) {
-      Get.snackbar('Error', 'Password is required');
+      showAppSnackbar('Error', 'Password is required');
       return false;
     }
 
@@ -390,6 +391,7 @@ class HomeController extends GetxController {
     );
 
     if (!deleted) return;
-    Get.snackbar('Success', 'Transaction deleted successfully.');
+    showAppSnackbar('Success', 'Transaction deleted successfully.');
   }
 }
+

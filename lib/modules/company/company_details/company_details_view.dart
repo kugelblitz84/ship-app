@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -577,7 +578,7 @@ class _StatementActionsCard extends StatelessWidget {
                               if (tempType ==
                                   StatementTimeFilterType.selectedMonth) {
                                 if (tempSelectedMonth == null) {
-                                  Get.snackbar(
+                                  showAppSnackbar(
                                     'Missing month',
                                     'Please select a month.',
                                   );
@@ -592,7 +593,7 @@ class _StatementActionsCard extends StatelessWidget {
 
                               if (tempRangeStart == null ||
                                   tempRangeEnd == null) {
-                                Get.snackbar(
+                                showAppSnackbar(
                                   'Missing range',
                                   'Please select a valid date range.',
                                 );
@@ -1399,3 +1400,4 @@ double _listViewportHeight({
   final visibleItems = listLength < 5 ? listLength : 5;
   return itemHeight * visibleItems;
 }
+

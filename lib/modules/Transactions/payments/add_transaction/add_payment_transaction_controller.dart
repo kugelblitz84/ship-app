@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:get/get.dart';
 
 import '../../../../core/services/api_error_handler.dart';
@@ -92,7 +93,7 @@ class AddTransactionController extends GetxController {
     final normalizedType = _normalize(type);
 
     if (normalizedType.isEmpty) {
-      Get.snackbar('Error', 'Transaction method is required');
+      showAppSnackbar('Error', 'Transaction method is required');
       return null;
     }
 
@@ -123,12 +124,12 @@ class AddTransactionController extends GetxController {
     final trimmedPassword = password.trim();
 
     if (normalizedMethod.isEmpty) {
-      Get.snackbar('Error', 'Transaction method is required');
+      showAppSnackbar('Error', 'Transaction method is required');
       return false;
     }
 
     if (trimmedPassword.isEmpty) {
-      Get.snackbar('Error', 'Password is required');
+      showAppSnackbar('Error', 'Password is required');
       return false;
     }
 
@@ -176,7 +177,7 @@ class AddTransactionController extends GetxController {
 
     if (!deleted) return;
 
-    Get.snackbar(
+    showAppSnackbar(
       'Method Deleted',
       'Transaction method deleted successfully.',
       snackPosition: SnackPosition.TOP,
@@ -358,22 +359,22 @@ class AddTransactionController extends GetxController {
   Future<void> onAddTransactionPressed() async {
     if (_isLoading.value) return;
     if (!(formKey.currentState?.validate() ?? false)) {
-      Get.snackbar(
+      showAppSnackbar(
         'Missing Information',
         'Please complete all required fields before submitting.',
       );
       return;
     }
     if (selectedCompany == null) {
-      Get.snackbar('Error', 'Please select a company');
+      showAppSnackbar('Error', 'Please select a company');
       return;
     }
     if (selectedShip == null) {
-      Get.snackbar('Error', 'Please select a ship');
+      showAppSnackbar('Error', 'Please select a ship');
       return;
     }
     if ((selectedType.value ?? '').trim().isEmpty) {
-      Get.snackbar('Error', 'Please select a transaction type');
+      showAppSnackbar('Error', 'Please select a transaction type');
       return;
     }
 
@@ -421,7 +422,7 @@ class AddTransactionController extends GetxController {
         await Get.find<HomeController>().loadHomeData();
       }
       Get.back();
-      Get.snackbar(
+      showAppSnackbar(
         'Transaction Added',
         'Payment recorded and company due updated successfully.',
         snackPosition: SnackPosition.TOP,
@@ -620,3 +621,4 @@ class AddTransactionController extends GetxController {
     super.onClose();
   }
 }
+

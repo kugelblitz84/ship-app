@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/services/api_error_handler.dart';
@@ -40,7 +41,7 @@ class TransactionDetailsController extends GetxController {
 
     final linkedTripId = current.tripId.trim();
     if (linkedTripId.isEmpty) {
-      Get.snackbar('Trip Unavailable', 'This transaction has no linked trip.');
+      showAppSnackbar('Trip Unavailable', 'This transaction has no linked trip.');
       return;
     }
 
@@ -56,7 +57,7 @@ class TransactionDetailsController extends GetxController {
     );
 
     if (linkedTrip == null) {
-      Get.snackbar('Trip Not Found', 'Linked trip could not be loaded.');
+      showAppSnackbar('Trip Not Found', 'Linked trip could not be loaded.');
       return;
     }
 
@@ -69,7 +70,7 @@ class TransactionDetailsController extends GetxController {
 
     final trimmedPassword = password.trim();
     if (trimmedPassword.isEmpty) {
-      Get.snackbar('Error', 'Password is required');
+      showAppSnackbar('Error', 'Password is required');
       return false;
     }
 
@@ -119,7 +120,7 @@ class TransactionDetailsController extends GetxController {
 
     if (!deleted) return;
 
-    Get.snackbar('Success', 'Transaction deleted successfully.');
+    showAppSnackbar('Success', 'Transaction deleted successfully.');
     Get.back(result: true);
   }
 
@@ -132,3 +133,4 @@ class TransactionDetailsController extends GetxController {
     return value.toInt().toString();
   }
 }
+

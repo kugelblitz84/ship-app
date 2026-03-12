@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/bootstrap/bootstrap_controller.dart';
@@ -36,7 +37,7 @@ class ForceUpdateController extends GetxController {
     if (isLaunching.value) return;
 
     if (updateUrl.isEmpty) {
-      Get.snackbar('Update Link Missing', 'Update URL is not configured.');
+      showAppSnackbar('Update Link Missing', 'Update URL is not configured.');
       return;
     }
 
@@ -44,7 +45,7 @@ class ForceUpdateController extends GetxController {
     try {
       final uri = Uri.tryParse(updateUrl);
       if (uri == null) {
-        Get.snackbar('Invalid Link', 'Update URL is not valid.');
+        showAppSnackbar('Invalid Link', 'Update URL is not valid.');
         return;
       }
 
@@ -54,10 +55,11 @@ class ForceUpdateController extends GetxController {
       );
 
       if (!launched) {
-        Get.snackbar('Unable to Open Link', 'Please try again in a moment.');
+        showAppSnackbar('Unable to Open Link', 'Please try again in a moment.');
       }
     } finally {
       isLaunching.value = false;
     }
   }
 }
+

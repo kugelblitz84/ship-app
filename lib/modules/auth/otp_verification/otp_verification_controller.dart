@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../../core/services/api_error_handler.dart';
@@ -58,7 +59,7 @@ class OtpVerificationController extends GetxController {
       );
       if (!response.isSuccess) return;
 
-      Get.snackbar(
+      showAppSnackbar(
         'OTP Sent',
         'A 6-digit OTP has been sent to ${targetEmail.value}.',
       );
@@ -104,7 +105,7 @@ class OtpVerificationController extends GetxController {
     }
 
     if (targetEmail.value.isEmpty) {
-      Get.snackbar('Error', 'Email was not found. Please login again.');
+      showAppSnackbar('Error', 'Email was not found. Please login again.');
       return;
     }
 
@@ -134,21 +135,21 @@ class OtpVerificationController extends GetxController {
           break;
         case OtpValidationStatus.invalid:
           showOtpError.value = true;
-          Get.snackbar('Invalid OTP', 'The OTP you entered is incorrect.');
+          showAppSnackbar('Invalid OTP', 'The OTP you entered is incorrect.');
           break;
         case OtpValidationStatus.expired:
           showOtpError.value = true;
-          Get.snackbar(
+          showAppSnackbar(
             'OTP Expired',
             'Your OTP expired. Please resend a new code.',
           );
           break;
         case OtpValidationStatus.noOtp:
           showOtpError.value = true;
-          Get.snackbar('No OTP', 'No OTP found. Please resend the code.');
+          showAppSnackbar('No OTP', 'No OTP found. Please resend the code.');
           break;
         case OtpValidationStatus.emailMismatch:
-          Get.snackbar(
+          showAppSnackbar(
             'Error',
             'OTP does not match this account. Please login again.',
           );
@@ -179,3 +180,4 @@ class OtpVerificationController extends GetxController {
     super.onClose();
   }
 }
+

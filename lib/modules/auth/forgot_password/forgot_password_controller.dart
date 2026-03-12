@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:get/get.dart';
 
 import '../../../core/services/api_error_handler.dart';
@@ -36,7 +37,7 @@ class ForgotPasswordController extends GetxController {
       );
       if (!response.isSuccess) return;
 
-      Get.snackbar(
+      showAppSnackbar(
         'Email Sent',
         'Password reset instructions have been sent to your email.',
       );
@@ -52,3 +53,4 @@ class ForgotPasswordController extends GetxController {
     super.onClose();
   }
 }
+

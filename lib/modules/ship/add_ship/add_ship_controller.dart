@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import 'package:get/get.dart';
 
 import '../../../core/services/api_error_handler.dart';
@@ -45,7 +46,7 @@ class AddShipController extends GetxController {
       print(response.isSuccess);
 
       Get.back();
-      Get.snackbar(
+      showAppSnackbar(
         'Ship Added',
         '${shipNameController.text.trim()} has been added.',
         snackPosition: SnackPosition.TOP,
@@ -65,3 +66,4 @@ class AddShipController extends GetxController {
     super.onClose();
   }
 }
+

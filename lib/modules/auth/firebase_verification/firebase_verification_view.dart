@@ -11,19 +11,19 @@ class FirebaseVerificationView extends GetView<FirebaseVerificationController> {
   @override
   Widget build(BuildContext context) {
     return AppSliverScaffold(
-      title: 'Verify Email',
-      subtitle: 'Confirm your email address to continue',
-      icon: Icons.mark_email_read_outlined,
+      title: 'Verify Account',
+      subtitle: 'Complete OTP verification to continue',
+      icon: Icons.verified_user_outlined,
       maxContentWidth: 560,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(height: 8.h),
           const AuthHeader(
-            icon: Icons.mark_email_read_outlined,
-            title: 'Verify Your Email',
+            icon: Icons.verified_user_outlined,
+            title: 'Verify Your Account',
             subtitle:
-                'We sent a verification link to your email address. Open it and confirm your account.',
+                'Use the OTP sent to your email address to verify your account.',
           ),
           Container(
             padding: EdgeInsets.all(16.w),
@@ -57,11 +57,11 @@ class FirebaseVerificationView extends GetView<FirebaseVerificationController> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('Didn\'t get it? ', style: AppTextStyles.bodyMedium),
+              Text('Need a new code? ', style: AppTextStyles.bodyMedium),
               Obx(() {
                 final isLoading = controller.isLoading.value;
                 return AppLinkButton(
-                  text: isLoading ? 'Sending...' : 'Resend Email',
+                  text: isLoading ? 'Opening...' : 'Go To OTP Verification',
                   onPressed: isLoading ? null : controller.onResendPressed,
                 );
               }),
@@ -71,7 +71,7 @@ class FirebaseVerificationView extends GetView<FirebaseVerificationController> {
           Obx(() {
             final isLoading = controller.isLoading.value;
             return AppButton(
-              text: 'I\'ve Verified',
+              text: 'I\'ve Verified With OTP',
               icon: Icons.check_circle_outline_rounded,
               onPressed: controller.onIverifiedPressed,
               isLoading: isLoading,

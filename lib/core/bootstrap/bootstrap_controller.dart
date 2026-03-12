@@ -71,14 +71,14 @@ class BootstrapController extends GetxController {
               .timeout(
                 const Duration(seconds: 8),
                 onTimeout: () =>
-                    const UserAccessStatus(isBlocked: false, isVerified: true),
+                    const UserAccessStatus(isBlocked: false, isVerified: false),
               ),
           showErrorSnackbar: false,
           fallbackMessage: 'Unable to verify account access',
         );
         final accessStatus =
             accessResponse.data ??
-            const UserAccessStatus(isBlocked: false, isVerified: true);
+            const UserAccessStatus(isBlocked: false, isVerified: false);
         final isBlocked = accessStatus.isBlocked;
 
         if (isBlocked) {
