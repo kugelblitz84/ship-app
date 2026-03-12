@@ -1095,13 +1095,9 @@ class CompanyStatementUtil {
   }
 
   static String _formatType(String type) {
-    final normalized = type.trim();
-    if (normalized.isEmpty) return 'N/A';
-
-    return normalized
-        .split(RegExp(r'[-_\s]+'))
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
+    final trimmed = type.trim();
+    if (trimmed.isEmpty) return 'N/A';
+    return trimmed;
   }
 
   static Future<void> _showSaveSuccessModal(

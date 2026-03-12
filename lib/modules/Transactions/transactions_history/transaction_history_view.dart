@@ -75,6 +75,7 @@ class TransactionHistoryView extends GetView<TransactionHistoryController> {
                       padding: EdgeInsets.only(bottom: AppSpacing.base),
                       child: _TransactionCard(
                         transaction: transaction,
+                        shipName: controller.resolvedShipName(transaction),
                         onTap: () =>
                             controller.openTransactionDetails(transaction),
                         onDelete: () => controller.onDeleteTransactionPressed(
@@ -456,11 +457,13 @@ class _SummaryCard extends StatelessWidget {
 class _TransactionCard extends StatelessWidget {
   const _TransactionCard({
     required this.transaction,
+    required this.shipName,
     this.onTap,
     this.onDelete,
   });
 
   final TransactionModel transaction;
+  final String shipName;
   final VoidCallback? onTap;
   final VoidCallback? onDelete;
 
@@ -472,6 +475,7 @@ class _TransactionCard extends StatelessWidget {
     final companyName = transaction.companyName.trim().isEmpty
         ? 'N/A'
         : transaction.companyName;
+    final resolvedShipName = shipName.trim();
     final dateLabel = transaction.date.trim().isEmpty ? '--' : transaction.date;
     final transactionTypeLabel = transaction.transactionTypeLabel;
 
@@ -582,6 +586,13 @@ class _TransactionCard extends StatelessWidget {
                     color: AppColors.neutral700,
                     backgroundColor: AppColors.neutral100,
                   ),
+                  if (resolvedShipName.isNotEmpty)
+                    _MetaChip(
+                      icon: Icons.directions_boat_outlined,
+                      label: resolvedShipName,
+                      color: AppColors.neutral700,
+                      backgroundColor: AppColors.neutral100,
+                    ),
                 ],
               ),
             ],

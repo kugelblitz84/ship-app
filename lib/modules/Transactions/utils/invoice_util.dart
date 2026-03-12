@@ -690,48 +690,24 @@ class InvoiceUtil {
   }
 
   static String _formatType(String type) {
-    final normalized = type.trim();
-    if (normalized.isEmpty) {
+    final trimmed = type.trim();
+    if (trimmed.isEmpty) {
       return 'N/A';
     }
-
-    return normalized
-        .split('-')
-        .map(
-          (word) => word.isEmpty
-              ? word
-              : '${word[0].toUpperCase()}${word.substring(1)}',
-        )
-        .join(' ');
+    return trimmed;
   }
 
   static String _formatTransactionCategory(String transactionType) {
-    final normalized = transactionType.trim().toLowerCase();
-    if (normalized == 'expenses') {
-      return 'Expenses';
-    }
-    if (normalized == 'trips') {
-      return 'Trip';
-    }
-    return 'Payment';
+    final trimmed = transactionType.trim();
+    return trimmed.isEmpty ? 'Payment' : trimmed;
   }
 
   static String _formatExpenseSource(String expenseSource) {
-    final normalized = expenseSource.trim().toLowerCase();
-    if (normalized == 'main-balance') {
-      return 'From Main Balance';
-    }
-    if (normalized == 'company') {
-      return 'Deducted from Due';
-    }
-    if (normalized.isEmpty) {
+    final trimmed = expenseSource.trim();
+    if (trimmed.isEmpty) {
       return 'N/A';
     }
-
-    return normalized
-        .split(RegExp(r'[-_\s]+'))
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
+    return trimmed;
   }
 
   static void _showErrorDialog(BuildContext context, String message) {
@@ -771,37 +747,22 @@ class InvoicePreviewPage extends StatelessWidget {
   }
 
   String _formatType(String type) {
-    final normalized = type.trim();
-    if (normalized.isEmpty) return 'N/A';
-    return normalized
-        .split('-')
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
+    final trimmed = type.trim();
+    if (trimmed.isEmpty) return 'N/A';
+    return trimmed;
   }
 
   String _formatTransactionCategory(String transactionType) {
-    final normalized = transactionType.trim().toLowerCase();
-    if (normalized == 'expenses') return 'Expenses';
-    if (normalized == 'trips') return 'Trip';
-    return 'Payment';
+    final trimmed = transactionType.trim();
+    return trimmed.isEmpty ? 'Payment' : trimmed;
   }
 
   static String _formatExpenseSource(String expenseSource) {
-    final normalized = expenseSource.trim().toLowerCase();
-    if (normalized == 'main-balance') {
-      return 'From Main Balance';
-    }
-    if (normalized == 'company') {
-      return 'Deducted from Due';
-    }
-    if (normalized.isEmpty) {
+    final trimmed = expenseSource.trim();
+    if (trimmed.isEmpty) {
       return 'N/A';
     }
-
-    return normalized
-        .split(RegExp(r'[-_\s]+'))
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
+    return trimmed;
   }
 
   String _companyDisplayName(TransactionModel transaction) {

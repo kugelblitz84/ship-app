@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../core/services/api_error_handler.dart';
 import '../../../core/services/firebase_auth_service.dart';
 import '../../../core/services/firestore_services/transactiondata_service.dart';
+import '../../../core/services/firestore_services/tripdata_service.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../../modules/home/home_controller.dart';
 import '../../../routes/app_routes.dart';
@@ -27,6 +28,10 @@ class TransactionHistoryController extends GetxController {
 
   final FirestoreTransactionService _transactionService =
       Get.find<FirestoreTransactionService>();
+  final FirestoreTripService? _tripService =
+      Get.isRegistered<FirestoreTripService>()
+      ? Get.find<FirestoreTripService>()
+      : null;
   final AuthService _authService = Get.find<AuthService>();
   final ScrollController scrollController = ScrollController();
 
@@ -52,6 +57,9 @@ class TransactionHistoryController extends GetxController {
   final RxBool showExpensesOnly = false.obs;
   final RxBool includeAddedToDueExpenses = true.obs;
   final RxBool includeMainBalanceExpenses = true.obs;
+  final RxMap<String, String> _tripShipNameByTripId = <String, String>{}.obs;
+  bool _tripShipIndexLoaded = false;
+  bool _isLoadingTripShipIndex = false;
   DocumentSnapshot<Map<String, dynamic>>? _lastDocument;
 
   @override
@@ -81,6 +89,8 @@ class TransactionHistoryController extends GetxController {
       _lastDocument = null;
       _hasMore.value = true;
       transactions.clear();
+      _tripShipIndexLoaded = false;
+      _tripShipNameByTripId.clear();
     }
 
     if (!_hasMore.value && !reset) {
@@ -115,6 +125,8 @@ class TransactionHistoryController extends GetxController {
       }
       _lastDocument = page.lastDocument;
       _hasMore.value = page.hasMore;
+
+      await _ensureTripShipIndexLoaded();
     }
 
     _isLoading.value = false;
@@ -224,9 +236,7 @@ class TransactionHistoryController extends GetxController {
       final company = transaction.companyName.trim().toLowerCase();
       final companyFilterMatch =
           selectedCompanyFilter.isEmpty || company == selectedCompanyFilter;
-      final ship = (transaction.companyAndShipInfo.shipName ?? '')
-          .trim()
-          .toLowerCase();
+      final ship = resolvedShipName(transaction).trim().toLowerCase();
       final shipFilterMatch =
           selectedShipFilter.isEmpty || ship == selectedShipFilter;
       final expenseToggleMatch = _matchesExpenseToggleFilter(transaction);
@@ -323,10 +333,7 @@ class TransactionHistoryController extends GetxController {
   List<String> get availableShips {
     final ships =
         transactions
-            .map(
-              (transaction) =>
-                  (transaction.companyAndShipInfo.shipName ?? '').trim(),
-            )
+            .map((transaction) => resolvedShipName(transaction).trim())
             .where((name) => name.isNotEmpty)
             .toSet()
             .toList()
@@ -334,6 +341,21 @@ class TransactionHistoryController extends GetxController {
             (left, right) => left.toLowerCase().compareTo(right.toLowerCase()),
           );
     return ships;
+  }
+
+  String resolvedShipName(TransactionModel transaction) {
+    final directShipName = (transaction.companyAndShipInfo.shipName ?? '')
+        .trim();
+    if (directShipName.isNotEmpty) {
+      return directShipName;
+    }
+
+    final linkedTripId = transaction.tripId.trim();
+    if (linkedTripId.isEmpty) {
+      return '';
+    }
+
+    return (_tripShipNameByTripId[linkedTripId] ?? '').trim();
   }
 
   void onSortChanged(TransactionSortOption? value) {
@@ -591,5 +613,36 @@ class TransactionHistoryController extends GetxController {
       loadMoreTransactions();
     }
   }
-}
 
+  Future<void> _ensureTripShipIndexLoaded() async {
+    if (_tripShipIndexLoaded ||
+        _isLoadingTripShipIndex ||
+        _tripService == null) {
+      return;
+    }
+
+    _isLoadingTripShipIndex = true;
+    try {
+      final trips = await _tripService!.getTrips();
+      final index = <String, String>{};
+
+      for (final trip in trips) {
+        final tripId = trip.tripId.trim();
+        final shipName = trip.companyAndShipInfo.shipName.trim();
+
+        if (tripId.isEmpty || shipName.isEmpty) {
+          continue;
+        }
+
+        index[tripId] = shipName;
+      }
+
+      _tripShipNameByTripId.assignAll(index);
+    } catch (_) {
+      // Ship lookup is best-effort for display only; keep history usable.
+    } finally {
+      _tripShipIndexLoaded = true;
+      _isLoadingTripShipIndex = false;
+    }
+  }
+}

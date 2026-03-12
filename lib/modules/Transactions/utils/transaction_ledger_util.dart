@@ -398,14 +398,9 @@ class TransactionLedgerUtil {
   }
 
   static String _labelType(String type) {
-    final normalized = type.trim().toLowerCase();
-    if (normalized.isEmpty) return 'N/A';
-
-    return normalized
-        .split(RegExp(r'[-_\s]+'))
-        .where((part) => part.isNotEmpty)
-        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-        .join(' ');
+    final trimmed = type.trim();
+    if (trimmed.isEmpty) return 'N/A';
+    return trimmed;
   }
 
   static String _pdfText(String value) {
@@ -1005,4 +1000,3 @@ class _LedgerBuildResult {
   final double totalCredit;
   final double closingBalance;
 }
-
