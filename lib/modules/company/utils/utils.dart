@@ -17,7 +17,7 @@ import '../models/company_model.dart';
 class CompanyStatementUtil {
   CompanyStatementUtil._();
 
-  static const int _maxLedgerEntriesPerPage = 6;
+  static const int _maxLedgerEntriesPerPage = 20;
   static const double _estimatedLedgerHeaderHeight = 26;
   static const double _estimatedLedgerRowHeight = 24;
   static const double _estimatedClosingBoxHeight = 92;

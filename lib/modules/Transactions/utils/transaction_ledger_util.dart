@@ -16,7 +16,7 @@ import '../../trip/models/trip_model.dart' as trip_models;
 class TransactionLedgerUtil {
   TransactionLedgerUtil._();
 
-  static const int _maxLedgerEntriesPerPage = 7;
+  static const int _maxLedgerEntriesPerPage = 20;
   static const double _estimatedLedgerHeaderHeight = 26;
   static const double _estimatedLedgerRowHeight = 24;
   static const double _estimatedNotesBlockHeight = 84;
