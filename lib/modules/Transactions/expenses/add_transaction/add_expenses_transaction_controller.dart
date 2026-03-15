@@ -5,11 +5,13 @@ import 'package:urgent/modules/Transactions/models/transaction_model.dart';
 
 import '../../../../core/services/api_error_handler.dart';
 import '../../../../core/services/firebase_auth_service.dart';
+import '../../../../core/services/firestore_services/cash_in_cash_out_service.dart';
 import '../../../../core/services/firestore_services/companydata_service.dart';
 import '../../../../core/services/firestore_services/shipdata_service.dart';
 import '../../../../core/services/firestore_services/transactiondata_service.dart';
 import '../../../../core/themes/themes.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../../../cashin_cashout/models/cash_in_cash_out_model.dart';
 import '../../../home/home_controller.dart';
 import '../../../company/models/company_model.dart';
 import '../../../ship/models/ship_model.dart';
@@ -26,6 +28,8 @@ class AddExpensesTransactionController extends GetxController {
   final FirestoreShipService _shipService = Get.find<FirestoreShipService>();
   final FirestoreTransactionService _transactionService =
       Get.find<FirestoreTransactionService>();
+  final FirestoreCashInCashOutService _cashInCashOutService =
+      Get.find<FirestoreCashInCashOutService>();
   final AuthService _authService = Get.find<AuthService>();
 
   final RxBool _isLoading = false.obs;
@@ -40,6 +44,7 @@ class AddExpensesTransactionController extends GetxController {
   final RxList<CompanyModel> companies = <CompanyModel>[].obs;
   final RxList<ShipModel> ships = <ShipModel>[].obs;
   final RxList<TransactionModel> transactions = <TransactionModel>[].obs;
+  final RxList<CashInCashOutModel> cashFlowEntries = <CashInCashOutModel>[].obs;
   final RxnString selectedCompanyName = RxnString();
   final RxnString selectedShipName = RxnString();
   final RxnString selectedType = RxnString();
@@ -266,17 +271,28 @@ class AddExpensesTransactionController extends GetxController {
   }
 
   Future<void> loadTransactions() async {
-    final response = await ApiErrorHandler.call(
+    final txResponse = await ApiErrorHandler.call(
       () => _transactionService.getTransactions(),
       fallbackMessage: 'Failed to load transactions',
       showErrorSnackbar: true,
     );
 
-    if (response.isSuccess && response.data != null) {
-      transactions.assignAll(response.data!);
-      _updateMainBalancePreview();
-      _updateCompanySummary();
+    if (txResponse.isSuccess && txResponse.data != null) {
+      transactions.assignAll(txResponse.data!);
     }
+
+    final cashFlowResponse = await ApiErrorHandler.call(
+      () => _cashInCashOutService.getEntriesSortedByDateDesc(),
+      fallbackMessage: 'Failed to load cash in/cash out entries',
+      showErrorSnackbar: false,
+    );
+
+    if (cashFlowResponse.isSuccess && cashFlowResponse.data != null) {
+      cashFlowEntries.assignAll(cashFlowResponse.data!);
+    }
+
+    _updateMainBalancePreview();
+    _updateCompanySummary();
   }
 
   void onCompanyChanged(String? companyName) {
@@ -479,6 +495,13 @@ class AddExpensesTransactionController extends GetxController {
         total -= amount;
       }
     }
+
+    for (final entry in cashFlowEntries) {
+      final amount = _toDouble(entry.amount);
+      if (amount <= 0) continue;
+      total += entry.isCashOut ? -amount : amount;
+    }
+
     return total;
   }
 
@@ -532,4 +555,3 @@ class AddExpensesTransactionController extends GetxController {
     super.onClose();
   }
 }
-

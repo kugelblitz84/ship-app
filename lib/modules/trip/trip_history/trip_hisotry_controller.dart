@@ -1,8 +1,12 @@
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 import '../../../core/services/api_error_handler.dart';
+import '../../../core/services/firebase_auth_service.dart';
 import '../../../core/services/firestore_services/tripdata_service.dart';
+import '../../../core/widgets/widgets.dart';
+import '../../home/home_controller.dart';
 import '../models/trip_model.dart';
 
 enum TripSortOption { newest, oldest, fromAZ, toAZ }
@@ -11,11 +15,13 @@ class TripHistoryController extends GetxController {
   static const int _pageSize = 10;
 
   final FirestoreTripService _tripService = Get.find<FirestoreTripService>();
+  final AuthService _authService = Get.find<AuthService>();
   final ScrollController scrollController = ScrollController();
 
   RxList<TripModel> trips = <TripModel>[].obs;
   RxBool isLoading = false.obs;
   RxBool isLoadingMore = false.obs;
+  RxBool isDeleting = false.obs;
   RxBool hasMore = true.obs;
   DocumentSnapshot<Map<String, dynamic>>? _lastDocument;
 
@@ -132,6 +138,58 @@ class TripHistoryController extends GetxController {
 
   Future<void> loadMoreTrips() async {
     await fetchTripsPage(reset: false, showLoader: false);
+  }
+
+  Future<bool> deleteTripWithPassword({
+    required TripModel trip,
+    required String password,
+  }) async {
+    if (isDeleting.value) return false;
+
+    final trimmedPassword = password.trim();
+    if (trimmedPassword.isEmpty) {
+      showAppSnackbar('Error', 'Password is required');
+      return false;
+    }
+
+    isDeleting.value = true;
+    try {
+      final reauthResponse = await ApiErrorHandler.call(
+        () => _authService.reauthenticate(trimmedPassword),
+        fallbackMessage: 'Failed to verify password',
+      );
+      if (!reauthResponse.isSuccess) return false;
+
+      final deleteResponse = await ApiErrorHandler.call(
+        () => _tripService.deleteTrip(trip: trip),
+        fallbackMessage: 'Failed to delete trip',
+      );
+      if (!deleteResponse.isSuccess) return false;
+
+      trips.removeWhere((item) => item.tripId == trip.tripId);
+
+      if (Get.isRegistered<HomeController>()) {
+        await Get.find<HomeController>().loadHomeData();
+      }
+
+      return true;
+    } finally {
+      isDeleting.value = false;
+    }
+  }
+
+  Future<void> onDeleteTripPressed(BuildContext context, TripModel trip) async {
+    final deleted = await showPasswordConfirmDeletionDialog(
+      context: context,
+      title: 'Delete Trip',
+      message:
+          'Enter your password to delete this trip bill of ৳ ${_formatAmount(_toDouble(trip.totalBill))}.',
+      onConfirm: (password) =>
+          deleteTripWithPassword(trip: trip, password: password),
+    );
+
+    if (!deleted) return;
+    showAppSnackbar('Success', 'Trip deleted successfully.');
   }
 
   List<TripModel> get filteredTrips {
@@ -285,6 +343,17 @@ class TripHistoryController extends GetxController {
 
   DateTime _safeDate(String rawDate) {
     return DateTime.tryParse(rawDate.trim()) ?? DateTime(1970);
+  }
+
+  double _toDouble(dynamic value) {
+    if (value == null) return 0;
+    final sanitized = value.toString().replaceAll(',', '').trim();
+    if (sanitized.isEmpty) return 0;
+    return double.tryParse(sanitized) ?? 0;
+  }
+
+  String _formatAmount(double value) {
+    return value.toInt().toString();
   }
 
   void _onScroll() {

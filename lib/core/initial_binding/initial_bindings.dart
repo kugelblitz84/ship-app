@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import '../services/firestore_services/admin_access_service.dart';
 import '../services/app_update_service.dart';
+import '../services/firestore_services/cash_in_cash_out_service.dart';
 import '../services/firestore_services/companydata_service.dart';
 import '../services/firestore_services/shipdata_service.dart';
 import '../services/firestore_services/transactiondata_service.dart';
@@ -27,6 +28,10 @@ class InitialBindings extends Bindings {
     Get.put<FirestoreTripService>(FirestoreTripService(), permanent: true);
     Get.put<FirestoreTransactionService>(
       FirestoreTransactionService(),
+      permanent: true,
+    );
+    Get.put<FirestoreCashInCashOutService>(
+      FirestoreCashInCashOutService(),
       permanent: true,
     );
     Get.put<ConnectivityWatcherService>(

@@ -25,6 +25,9 @@ class FirestoreTripService extends GetxService {
   CollectionReference<Map<String, dynamic>> get _shipsCollection =>
       _userDoc.collection('ships');
 
+  CollectionReference<Map<String, dynamic>> get _transactionsCollection =>
+      _userDoc.collection('transactions');
+
   String createTripId() {
     return _tripsCollection.doc().id;
   }
@@ -81,7 +84,9 @@ class FirestoreTripService extends GetxService {
 
   Future<List<TripModel>> getTrips() async {
     final snapshot = await _tripsCollection.get();
-    return snapshot.docs.map((doc) => TripModel.fromMap(doc.data())).toList();
+    return snapshot.docs
+        .map((doc) => TripModel.fromMap(doc.data(), fallbackTripId: doc.id))
+        .toList();
   }
 
   Future<PaginatedResult<TripModel>> getTripsPage({
@@ -98,7 +103,7 @@ class FirestoreTripService extends GetxService {
 
     final snapshot = await query.get();
     final trips = snapshot.docs
-        .map((doc) => TripModel.fromMap(doc.data()))
+        .map((doc) => TripModel.fromMap(doc.data(), fallbackTripId: doc.id))
         .toList();
 
     return PaginatedResult<TripModel>(
@@ -120,7 +125,16 @@ class FirestoreTripService extends GetxService {
     required String previousTo,
     required String previousDate,
   }) async {
-    final tripRef = _tripsCollection.doc(trip.tripId);
+    final tripId = trip.tripId.trim();
+    if (tripId.isEmpty) {
+      throw FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'invalid-argument',
+        message: 'Trip id is required.',
+      );
+    }
+
+    final tripRef = _tripsCollection.doc(tripId);
     final companyRef = await _resolveDocByName(
       collection: _companiesCollection,
       name: trip.companyAndShipInfo.companyName,
@@ -132,7 +146,20 @@ class FirestoreTripService extends GetxService {
       entityLabel: 'Ship',
     );
 
+    // Find the linked transaction BEFORE the Firestore transaction.
+    DocumentReference<Map<String, dynamic>>? linkedTransactionRef;
+    if (tripId.isNotEmpty) {
+      final txQuery = await _transactionsCollection
+          .where('tripId', isEqualTo: tripId)
+          .limit(1)
+          .get();
+      if (txQuery.docs.isNotEmpty) {
+        linkedTransactionRef = txQuery.docs.first.reference;
+      }
+    }
+
     await _firestore.runTransaction((transaction) async {
+      // ── All reads MUST happen before any writes ──────────────
       final tripSnapshot = await transaction.get(tripRef);
       if (!tripSnapshot.exists) {
         throw FirebaseException(
@@ -162,6 +189,13 @@ class FirestoreTripService extends GetxService {
         );
       }
 
+      bool linkedTxExists = false;
+      if (linkedTransactionRef != null) {
+        final linkedTxSnapshot = await transaction.get(linkedTransactionRef);
+        linkedTxExists = linkedTxSnapshot.exists;
+      }
+
+      // ── Process data ─────────────────────────────────────────
       final payload = trip.toMap();
       payload['updatedAt'] = FieldValue.serverTimestamp();
 
@@ -176,6 +210,7 @@ class FirestoreTripService extends GetxService {
       final companyBilled = _toDouble(companyData['totalAmountBilled']);
       final companyDue = _toDouble(companyData['totalAmountDue']);
 
+      // ── All writes ───────────────────────────────────────────
       transaction.update(tripRef, payload);
 
       if (delta != 0) {
@@ -184,6 +219,102 @@ class FirestoreTripService extends GetxService {
           'totalAmountDue': _formatAmount(companyDue + delta),
         });
       }
+
+      // Sync the linked transaction to match the updated trip.
+      if (linkedTransactionRef != null && linkedTxExists) {
+        transaction.update(linkedTransactionRef, {
+          'amount': _formatAmount(currentBill),
+          'tripFrom': trip.from.trim(),
+          'tripTo': trip.to.trim(),
+          'tripInfo': {'from': trip.from.trim(), 'to': trip.to.trim()},
+          'date': trip.date.trim(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    });
+  }
+
+  Future<void> deleteTrip({required TripModel trip}) async {
+    final tripId = trip.tripId.trim();
+    if (tripId.isEmpty) {
+      throw FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'invalid-argument',
+        message: 'Trip id is required.',
+      );
+    }
+
+    final tripRef = _tripsCollection.doc(tripId);
+    final companyRef = await _resolveDocByName(
+      collection: _companiesCollection,
+      name: trip.companyAndShipInfo.companyName,
+      entityLabel: 'Company',
+    );
+
+    // Find the linked transaction BEFORE the Firestore transaction
+    // (Firestore SDK does not support queries inside transactions).
+    DocumentReference<Map<String, dynamic>>? linkedTransactionRef;
+    final txQuery = await _transactionsCollection
+        .where('tripId', isEqualTo: tripId)
+        .limit(1)
+        .get();
+    if (txQuery.docs.isNotEmpty) {
+      linkedTransactionRef = txQuery.docs.first.reference;
+    }
+
+    await _firestore.runTransaction((transaction) async {
+      final tripSnapshot = await transaction.get(tripRef);
+      if (!tripSnapshot.exists) {
+        throw FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'not-found',
+          message: 'Trip not found.',
+        );
+      }
+
+      final companySnapshot = await transaction.get(companyRef);
+      if (!companySnapshot.exists) {
+        throw FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'not-found',
+          message:
+              'Selected company "${trip.companyAndShipInfo.companyName}" does not exist.',
+        );
+      }
+
+      // Read the linked transaction inside the transaction for consistency.
+      if (linkedTransactionRef != null) {
+        final linkedTxSnapshot = await transaction.get(linkedTransactionRef);
+        if (linkedTxSnapshot.exists) {
+          transaction.delete(linkedTransactionRef);
+        }
+      }
+
+      final tripData = tripSnapshot.data() ?? <String, dynamic>{};
+      final tripBillAmount = _toDouble(
+        tripData['totalBill'] ?? tripData['fundOwed'],
+      );
+
+      final companyData = companySnapshot.data() ?? <String, dynamic>{};
+      final currentBilled = _toDouble(companyData['totalAmountBilled']);
+      final currentDue = _toDouble(companyData['totalAmountDue']);
+
+      final updatedBilled = (currentBilled - tripBillAmount).clamp(
+        0,
+        double.infinity,
+      );
+      final updatedDue = (currentDue - tripBillAmount).clamp(
+        0,
+        double.infinity,
+      );
+
+      transaction.update(companyRef, {
+        'totalAmountBilled': _formatAmount(updatedBilled.toDouble()),
+        'totalAmountDue': _formatAmount(updatedDue.toDouble()),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      transaction.delete(tripRef);
     });
   }
 

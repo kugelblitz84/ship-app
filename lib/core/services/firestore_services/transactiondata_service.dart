@@ -10,6 +10,7 @@ class FirestoreTransactionService extends GetxService {
     : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
+  bool _useDateOnlyPaginationQuery = false;
 
   DocumentReference<Map<String, dynamic>> get _userDoc {
     final uid = _requireUid();
@@ -24,6 +25,9 @@ class FirestoreTransactionService extends GetxService {
 
   CollectionReference<Map<String, dynamic>> get _companiesCollection =>
       _userDoc.collection('companies');
+
+  CollectionReference<Map<String, dynamic>> get _tripsCollection =>
+      _userDoc.collection('trips');
 
   final List<String> _allowedTypes = <String>[];
   List<String> get allowedTypes => List.unmodifiable(_allowedTypes);
@@ -334,6 +338,60 @@ class FirestoreTransactionService extends GetxService {
           .toString()
           .trim();
 
+      // Handle trip-type transaction: cascade-delete the linked trip
+      // and reverse the trip's effect on company balances.
+      if (transactionCategory == 'trips') {
+        final tripId = (transactionData['tripId'] ?? '').toString().trim();
+
+        if (tripId.isNotEmpty) {
+          final tripRef = _tripsCollection.doc(tripId);
+          final tripSnapshot = await firebaseTransaction.get(tripRef);
+
+          if (tripSnapshot.exists) {
+            final tripData = tripSnapshot.data() ?? <String, dynamic>{};
+            final tripBillAmount = _toDouble(
+              tripData['totalBill'] ?? tripData['fundOwed'],
+            );
+
+            if (companyName.isNotEmpty) {
+              final companyRef = _companiesCollection.doc(
+                _normalizeNameKey(companyName, entityLabel: 'Company'),
+              );
+              final companySnapshot = await firebaseTransaction.get(companyRef);
+
+              if (companySnapshot.exists) {
+                final companyData =
+                    companySnapshot.data() ?? <String, dynamic>{};
+                final currentBilled = _toDouble(
+                  companyData['totalAmountBilled'],
+                );
+                final currentDue = _toDouble(companyData['totalAmountDue']);
+
+                final updatedBilled = (currentBilled - tripBillAmount).clamp(
+                  0,
+                  double.infinity,
+                );
+                final updatedDue = (currentDue - tripBillAmount).clamp(
+                  0,
+                  double.infinity,
+                );
+
+                firebaseTransaction.update(companyRef, {
+                  'totalAmountBilled': _formatAmount(updatedBilled.toDouble()),
+                  'totalAmountDue': _formatAmount(updatedDue.toDouble()),
+                  'updatedAt': FieldValue.serverTimestamp(),
+                });
+              }
+            }
+
+            firebaseTransaction.delete(tripRef);
+          }
+        }
+
+        firebaseTransaction.delete(transactionRef);
+        return;
+      }
+
       final needsCompanyUpdate =
           transactionCategory == 'payment' ||
           (transactionCategory == 'expenses' && expenseSource == 'company');
@@ -385,6 +443,257 @@ class FirestoreTransactionService extends GetxService {
     });
   }
 
+  Future<void> updateTransaction({
+    required TransactionModel transaction,
+  }) async {
+    final normalizedTransactionId = transaction.transactionId.trim();
+    if (normalizedTransactionId.isEmpty) {
+      throw FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'invalid-argument',
+        message: 'Transaction id is required.',
+      );
+    }
+
+    final paymentType = transaction.type.trim().toLowerCase();
+    final transactionCategory = transaction.transactionType
+        .trim()
+        .toLowerCase();
+
+    if (!_allowedTransactionCategories.contains(transactionCategory)) {
+      throw FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'invalid-argument',
+        message: 'Invalid transaction category: ${transaction.transactionType}',
+      );
+    }
+
+    if (transactionCategory != 'trips') {
+      if (_allowedTypes.isEmpty) {
+        await setTransactionMethods();
+      }
+      if (!_allowedTypes.contains(paymentType)) {
+        throw FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'invalid-argument',
+          message: 'Invalid transaction type: ${transaction.type}',
+        );
+      }
+    }
+
+    final expenseSource = transaction.expenseSource.trim().toLowerCase();
+    if (transactionCategory == 'expenses' &&
+        !_allowedExpenseSources.contains(expenseSource)) {
+      throw FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'invalid-argument',
+        message: 'Invalid expense source: ${transaction.expenseSource}',
+      );
+    }
+
+    final companyName =
+        transaction.companyAndShipInfo.companyName?.trim() ?? '';
+    final newNeedsCompanyUpdate =
+        transactionCategory == 'payment' ||
+        (transactionCategory == 'expenses' && expenseSource == 'company');
+    final requiresCompanyName =
+        transactionCategory == 'payment' ||
+        transactionCategory == 'trips' ||
+        (transactionCategory == 'expenses' && expenseSource == 'company');
+
+    if (requiresCompanyName && companyName.isEmpty) {
+      throw FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'invalid-argument',
+        message: 'Company is required for this transaction.',
+      );
+    }
+
+    final newAmount = _toDouble(transaction.amount);
+    if (newAmount <= 0) {
+      throw FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'invalid-argument',
+        message: 'Transaction amount must be greater than zero',
+      );
+    }
+
+    final transactionRef = _transactionsCollection.doc(normalizedTransactionId);
+
+    await _firestore.runTransaction((firebaseTransaction) async {
+      final snapshot = await firebaseTransaction.get(transactionRef);
+      if (!snapshot.exists) {
+        throw FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'not-found',
+          message: 'Transaction not found.',
+        );
+      }
+
+      final existingData = snapshot.data() ?? <String, dynamic>{};
+      final oldCategory = (existingData['transactionType'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final oldExpenseSource = (existingData['expenseSource'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final oldAmount = _toDouble(existingData['amount']);
+
+      final oldCompanyAndShipInfo =
+          existingData['companyAndShipInfo'] is Map<String, dynamic>
+          ? existingData['companyAndShipInfo'] as Map<String, dynamic>
+          : <String, dynamic>{};
+      final oldCompanyName = (oldCompanyAndShipInfo['companyName'] ?? '')
+          .toString()
+          .trim();
+
+      final oldNeedsCompanyUpdate =
+          oldCategory == 'payment' ||
+          (oldCategory == 'expenses' && oldExpenseSource == 'company');
+
+      final Map<String, DocumentReference<Map<String, dynamic>>> companyRefs =
+          <String, DocumentReference<Map<String, dynamic>>>{};
+      final Map<String, Map<String, dynamic>> companyDataByName =
+          <String, Map<String, dynamic>>{};
+
+      Future<void> ensureCompanyLoaded(String rawCompanyName) async {
+        final trimmedName = rawCompanyName.trim();
+        if (trimmedName.isEmpty) {
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'invalid-argument',
+            message: 'Company is required for this transaction.',
+          );
+        }
+
+        if (companyDataByName.containsKey(trimmedName)) {
+          return;
+        }
+
+        final ref = _companiesCollection.doc(
+          _normalizeNameKey(trimmedName, entityLabel: 'Company'),
+        );
+        final companySnapshot = await firebaseTransaction.get(ref);
+        if (!companySnapshot.exists) {
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'not-found',
+            message: 'Company "$trimmedName" does not exist.',
+          );
+        }
+
+        companyRefs[trimmedName] = ref;
+        companyDataByName[trimmedName] =
+            companySnapshot.data() ?? <String, dynamic>{};
+      }
+
+      if (oldNeedsCompanyUpdate) {
+        await ensureCompanyLoaded(oldCompanyName);
+      }
+      if (requiresCompanyName) {
+        await ensureCompanyLoaded(companyName);
+      }
+
+      final Map<String, double> receivedDeltaByCompany = <String, double>{};
+      final Map<String, double> dueDeltaByCompany = <String, double>{};
+
+      void addReceivedDelta(String company, double value) {
+        receivedDeltaByCompany[company] =
+            (receivedDeltaByCompany[company] ?? 0) + value;
+      }
+
+      void addDueDelta(String company, double value) {
+        dueDeltaByCompany[company] = (dueDeltaByCompany[company] ?? 0) + value;
+      }
+
+      if (oldNeedsCompanyUpdate) {
+        if (oldCategory == 'payment') {
+          addReceivedDelta(oldCompanyName, -oldAmount);
+          addDueDelta(oldCompanyName, oldAmount);
+        } else {
+          addDueDelta(oldCompanyName, oldAmount);
+        }
+      }
+
+      if (newNeedsCompanyUpdate) {
+        if (transactionCategory == 'payment') {
+          addReceivedDelta(companyName, newAmount);
+          addDueDelta(companyName, -newAmount);
+        } else {
+          addDueDelta(companyName, -newAmount);
+        }
+      }
+
+      for (final companyEntry in companyDataByName.entries) {
+        final currentCompanyName = companyEntry.key;
+        final currentCompanyData = companyEntry.value;
+        final ref = companyRefs[currentCompanyName]!;
+
+        final currentReceived = _toDouble(
+          currentCompanyData['totalAmountReceived'],
+        );
+        final currentDue = _toDouble(currentCompanyData['totalAmountDue']);
+
+        final receivedDelta = receivedDeltaByCompany[currentCompanyName] ?? 0;
+        final dueDelta = dueDeltaByCompany[currentCompanyName] ?? 0;
+
+        if (receivedDelta == 0 && dueDelta == 0) {
+          continue;
+        }
+
+        firebaseTransaction.update(ref, {
+          'totalAmountReceived': _formatAmount(currentReceived + receivedDelta),
+          'totalAmountDue': _formatAmount(currentDue + dueDelta),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      final persistedCompanyName = newNeedsCompanyUpdate ? companyName : '';
+      final tripId = transaction.tripId.trim();
+      final tripFrom = transaction.tripFrom.trim();
+      final tripTo = transaction.tripTo.trim();
+
+      var persistedTotalPrice = transaction.totalPrice;
+      var persistedAmountDue = transaction.amountDue;
+
+      if (newNeedsCompanyUpdate) {
+        final companyData =
+            companyDataByName[companyName] ?? <String, dynamic>{};
+        final companyBilled = _toDouble(companyData['totalAmountBilled']);
+        final companyDue = _toDouble(companyData['totalAmountDue']);
+        final dueDelta = dueDeltaByCompany[companyName] ?? 0;
+
+        persistedTotalPrice = _formatAmount(companyBilled);
+        persistedAmountDue = _formatAmount(companyDue + dueDelta);
+      }
+
+      firebaseTransaction.update(transactionRef, {
+        'transactionType': transactionCategory,
+        'expenseSource': expenseSource,
+        'tripId': tripId,
+        'tripFrom': tripFrom,
+        'tripTo': tripTo,
+        'tripInfo': {'from': tripFrom, 'to': tripTo},
+        'description': transaction.description,
+        'amount': _formatAmount(newAmount),
+        'totalPrice': persistedTotalPrice,
+        'amountDue': persistedAmountDue,
+        'date': _normalizeTransactionDate(transaction.date),
+        'type': paymentType,
+        'companyAndShipInfo': {
+          'companyName': transactionCategory == 'trips'
+              ? companyName
+              : persistedCompanyName,
+          'shipName': transaction.companyAndShipInfo.shipName,
+        },
+        'createdAt': existingData['createdAt'] ?? FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
   String _normalizeNameKey(String input, {required String entityLabel}) {
     final normalized = input.trim().toLowerCase().replaceAll(
       RegExp(r'\s+'),
@@ -424,7 +733,23 @@ class FirestoreTransactionService extends GetxService {
         snapshot.docs
             .map((doc) => TransactionModel.fromMap(doc.data()))
             .toList()
-          ..sort((a, b) => b.date.compareTo(a.date));
+          ..sort((a, b) {
+            final dateCompare = b.date.compareTo(a.date);
+            if (dateCompare != 0) {
+              return dateCompare;
+            }
+
+            final leftCreatedAt =
+                a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final rightCreatedAt =
+                b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final createdAtCompare = rightCreatedAt.compareTo(leftCreatedAt);
+            if (createdAtCompare != 0) {
+              return createdAtCompare;
+            }
+
+            return b.transactionId.compareTo(a.transactionId);
+          });
 
     return transactions;
   }
@@ -433,24 +758,75 @@ class FirestoreTransactionService extends GetxService {
     DocumentSnapshot<Map<String, dynamic>>? startAfter,
     int limit = 10,
   }) async {
-    Query<Map<String, dynamic>> query = _transactionsCollection
-        .orderBy('date', descending: true)
-        .limit(limit);
+    try {
+      final snapshot = await _runTransactionsPageQuery(
+        startAfter: startAfter,
+        limit: limit,
+        useDateOnlyOrder: _useDateOnlyPaginationQuery,
+      );
+
+      final transactions = snapshot.docs
+          .map((doc) => TransactionModel.fromMap(doc.data()))
+          .toList();
+
+      return PaginatedResult<TransactionModel>(
+        items: transactions,
+        lastDocument: snapshot.docs.isEmpty ? startAfter : snapshot.docs.last,
+        hasMore: snapshot.docs.length == limit,
+      );
+    } on FirebaseException catch (error) {
+      final needsCompositeIndex =
+          error.code == 'failed-precondition' &&
+          (error.message ?? '').toLowerCase().contains('requires an index');
+
+      if (!needsCompositeIndex || _useDateOnlyPaginationQuery) {
+        rethrow;
+      }
+
+      // Graceful fallback until composite index is deployed and active.
+      _useDateOnlyPaginationQuery = true;
+
+      final fallbackSnapshot = await _runTransactionsPageQuery(
+        startAfter: startAfter,
+        limit: limit,
+        useDateOnlyOrder: true,
+      );
+
+      final fallbackTransactions = fallbackSnapshot.docs
+          .map((doc) => TransactionModel.fromMap(doc.data()))
+          .toList();
+
+      return PaginatedResult<TransactionModel>(
+        items: fallbackTransactions,
+        lastDocument: fallbackSnapshot.docs.isEmpty
+            ? startAfter
+            : fallbackSnapshot.docs.last,
+        hasMore: fallbackSnapshot.docs.length == limit,
+      );
+    }
+  }
+
+  Future<QuerySnapshot<Map<String, dynamic>>> _runTransactionsPageQuery({
+    required DocumentSnapshot<Map<String, dynamic>>? startAfter,
+    required int limit,
+    required bool useDateOnlyOrder,
+  }) {
+    Query<Map<String, dynamic>> query = _transactionsCollection.orderBy(
+      'date',
+      descending: true,
+    );
+
+    if (!useDateOnlyOrder) {
+      query = query.orderBy('createdAt', descending: true);
+    }
+
+    query = query.limit(limit);
 
     if (startAfter != null) {
       query = query.startAfterDocument(startAfter);
     }
 
-    final snapshot = await query.get();
-    final transactions = snapshot.docs
-        .map((doc) => TransactionModel.fromMap(doc.data()))
-        .toList();
-
-    return PaginatedResult<TransactionModel>(
-      items: transactions,
-      lastDocument: snapshot.docs.isEmpty ? startAfter : snapshot.docs.last,
-      hasMore: snapshot.docs.length == limit,
-    );
+    return query.get();
   }
 
   double _toDouble(dynamic value) {

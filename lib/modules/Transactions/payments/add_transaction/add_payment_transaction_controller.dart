@@ -621,4 +621,3 @@ class AddTransactionController extends GetxController {
     super.onClose();
   }
 }
-

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
+import 'package:urgent/core/widgets/app_snackbar.dart';
 
 import '../../../core/themes/themes.dart';
 import '../../../core/widgets/widgets.dart';
@@ -24,21 +25,48 @@ class TransactionDetailsView extends GetView<TransactionDetailsController> {
           ? null
           : [
               Obx(
-                () => IconButton(
-                  tooltip: 'Delete transaction',
-                  onPressed: controller.isDeleting.value
-                      ? null
-                      : () => controller.onDeleteTransactionPressed(context),
-                  icon: controller.isDeleting.value
-                      ? SizedBox(
-                          width: 18.w,
-                          height: 18.w,
-                          child: const CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.delete_outline_rounded),
+                () => Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Edit transaction',
+                      onPressed:
+                          controller.isDeleting.value ||
+                              controller.isEditLoading.value ||
+                              controller.isUpdating.value
+                          ? null
+                          : () => _showEditDialog(context),
+                      icon:
+                          controller.isEditLoading.value ||
+                              controller.isUpdating.value
+                          ? SizedBox(
+                              width: 18.w,
+                              height: 18.w,
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.edit_outlined),
+                    ),
+                    IconButton(
+                      tooltip: 'Delete transaction',
+                      onPressed: controller.isDeleting.value
+                          ? null
+                          : () =>
+                                controller.onDeleteTransactionPressed(context),
+                      icon: controller.isDeleting.value
+                          ? SizedBox(
+                              width: 18.w,
+                              height: 18.w,
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.delete_outline_rounded),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -177,6 +205,229 @@ class TransactionDetailsView extends GetView<TransactionDetailsController> {
                 SizedBox(height: AppSpacing.massive),
               ],
             ),
+    );
+  }
+
+  Future<void> _showEditDialog(BuildContext context) async {
+    await Get.dialog(
+      AlertDialog(
+        title: const Text('Edit Transaction'),
+        content: SizedBox(
+          width: 620,
+          child: SingleChildScrollView(
+            child: Obx(() {
+              final showMethod = !controller.isTripTransaction;
+              final showExpenseSource = controller.isExpenseTransaction;
+              final showCompany =
+                  controller.isPaymentTransaction ||
+                  controller.isTripTransaction ||
+                  controller.isCompanyExpenseEdit;
+
+              final selectedMethod = controller.editSelectedType.value;
+              final methodValue =
+                  controller.transactionTypes.contains(selectedMethod)
+                  ? selectedMethod
+                  : null;
+
+              final selectedCompany = controller.editSelectedCompanyName.value;
+              final companyValue =
+                  controller.availableCompanies.contains(selectedCompany)
+                  ? selectedCompany
+                  : null;
+
+              final selectedShip = controller.editSelectedShipName.value;
+              final shipValue = controller.availableShips.contains(selectedShip)
+                  ? selectedShip
+                  : null;
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AppTextField(
+                    controller: controller.editAmountController,
+                    label: 'Amount',
+                    hint: controller.isTripTransaction
+                        ? 'Edit from trip details'
+                        : 'Enter amount',
+                    prefixIcon: Icons.currency_exchange_rounded,
+                    readOnly: controller.isTripTransaction,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  if (controller.isTripTransaction) ...[
+                    SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'Amount is derived from the trip (rate x quantity). Edit the trip to change it.',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.neutral500,
+                      ),
+                    ),
+                  ],
+                  SizedBox(height: AppSpacing.base),
+                  AppTextField(
+                    controller: controller.editDateController,
+                    label: 'Date',
+                    hint: 'YYYY-MM-DD',
+                    prefixIcon: Icons.calendar_today_rounded,
+                    readOnly: true,
+                    suffix: IconButton(
+                      tooltip: 'Pick date',
+                      icon: const Icon(Icons.event_rounded),
+                      onPressed: () =>
+                          controller.onPickEditDatePressed(context),
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.base),
+                  AppTextField(
+                    controller: controller.editDescriptionController,
+                    label: 'Description',
+                    hint: 'Optional description',
+                    prefixIcon: Icons.notes_rounded,
+                    maxLines: 3,
+                  ),
+                  if (showMethod) ...[
+                    SizedBox(height: AppSpacing.base),
+                    DropdownButtonFormField<String>(
+                      value: methodValue,
+                      decoration: const InputDecoration(
+                        labelText: 'Transaction Method',
+                        prefixIcon: Icon(Icons.account_balance_rounded),
+                      ),
+                      items: controller.transactionTypes
+                          .map(
+                            (type) => DropdownMenuItem<String>(
+                              value: type,
+                              child: Text(_formatType(type)),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: controller.onEditTypeChanged,
+                    ),
+                  ],
+                  if (showExpenseSource) ...[
+                    SizedBox(height: AppSpacing.base),
+                    DropdownButtonFormField<String>(
+                      value: controller.editSelectedExpenseSource.value,
+                      decoration: const InputDecoration(
+                        labelText: 'Expense Source',
+                        prefixIcon: Icon(Icons.source_outlined),
+                      ),
+                      items: const [
+                        DropdownMenuItem<String>(
+                          value: 'company',
+                          child: Text('Deduct from Company Due'),
+                        ),
+                        DropdownMenuItem<String>(
+                          value: 'main-balance',
+                          child: Text('Deduct from Main Balance'),
+                        ),
+                      ],
+                      onChanged: controller.onEditExpenseSourceChanged,
+                    ),
+                  ],
+                  if (showCompany) ...[
+                    SizedBox(height: AppSpacing.base),
+                    DropdownButtonFormField<String>(
+                      value: companyValue,
+                      decoration: const InputDecoration(
+                        labelText: 'Company',
+                        prefixIcon: Icon(Icons.business_outlined),
+                      ),
+                      items: controller.availableCompanies
+                          .map(
+                            (company) => DropdownMenuItem<String>(
+                              value: company,
+                              child: Text(company),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: controller.onEditCompanyChanged,
+                    ),
+                  ],
+                  SizedBox(height: AppSpacing.base),
+                  DropdownButtonFormField<String>(
+                    value: shipValue,
+                    decoration: const InputDecoration(
+                      labelText: 'Ship (optional)',
+                      prefixIcon: Icon(Icons.directions_boat_outlined),
+                    ),
+                    items: controller.availableShips
+                        .map(
+                          (ship) => DropdownMenuItem<String>(
+                            value: ship,
+                            child: Text(ship),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: controller.onEditShipChanged,
+                  ),
+                  SizedBox(height: AppSpacing.base),
+                  Container(
+                    padding: EdgeInsets.all(12.w),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySurface,
+                      borderRadius: AppRadius.md,
+                      border: Border.all(color: AppColors.neutral200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Fund Preview', style: AppTextStyles.labelMedium),
+                        SizedBox(height: 8.h),
+                        Text(
+                          'Main Balance: ৳ ${controller.currentMainBalanceDisplay.value} -> ৳ ${controller.updatedMainBalanceDisplay.value}',
+                          style: AppTextStyles.bodySmall,
+                        ),
+                        if (controller.updatedCompanyDueDisplay.value != '--')
+                          Text(
+                            'Company Due: ৳ ${controller.currentCompanyDueDisplay.value} -> ৳ ${controller.updatedCompanyDueDisplay.value}',
+                            style: AppTextStyles.bodySmall,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              if (Get.isDialogOpen ?? false) {
+                Get.back();
+              }
+            },
+            child: const Text('Cancel'),
+          ),
+          Obx(
+            () => TextButton(
+              onPressed: controller.isUpdating.value
+                  ? null
+                  : () async {
+                      final saved = await controller.saveEditedTransaction();
+                      if (!saved) return;
+                      if (Get.isDialogOpen ?? false) {
+                        Get.back();
+                      }
+                      showAppSnackbar(
+                        'Success',
+                        'Transaction updated successfully.',
+                      );
+                    },
+              child: controller.isUpdating.value
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

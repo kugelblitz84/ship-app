@@ -6,6 +6,7 @@ import '../../core/bootstrap/bootstrap_controller.dart';
 import '../../core/services/api_error_handler.dart';
 import '../../core/services/firebase_auth_service.dart';
 import '../../core/services/firestore_services/admin_access_service.dart';
+import '../../core/services/firestore_services/cash_in_cash_out_service.dart';
 import '../../core/services/firestore_services/companydata_service.dart';
 import '../../core/services/firestore_services/shipdata_service.dart';
 import '../../core/services/firestore_services/transactiondata_service.dart';
@@ -13,6 +14,7 @@ import '../../core/services/firestore_services/tripdata_service.dart';
 import '../../core/services/firestore_services/userdata_service.dart';
 import '../../core/widgets/widgets.dart';
 import '../../routes/app_routes.dart';
+import '../cashin_cashout/models/cash_in_cash_out_model.dart';
 import '../company/models/company_model.dart';
 import '../trip/models/trip_model.dart';
 import '../Transactions/models/transaction_model.dart';
@@ -32,6 +34,8 @@ class HomeController extends GetxController {
   final FirestoreTripService _tripService = Get.find<FirestoreTripService>();
   final FirestoreTransactionService _transactionService =
       Get.find<FirestoreTransactionService>();
+  final FirestoreCashInCashOutService _cashInCashOutService =
+      Get.find<FirestoreCashInCashOutService>();
 
   String? _loadedUserId;
 
@@ -53,6 +57,8 @@ class HomeController extends GetxController {
   // ── Recent Items ─────────────────────────────────────────────────────
   final RxList<TransactionModel> _allTransactions = <TransactionModel>[].obs;
   final RxList<TripModel> _allTrips = <TripModel>[].obs;
+  final RxList<CashInCashOutModel> _allCashFlowEntries =
+      <CashInCashOutModel>[].obs;
   List<CompanyModel> _companies = [];
 
   List<TransactionModel> get allTransactions => _allTransactions;
@@ -105,6 +111,7 @@ class HomeController extends GetxController {
         _loadCompanyCount(),
         _loadTripData(),
         _loadTransactionData(),
+        _loadCashInCashOutData(),
       ]);
       await _loadBalanceData();
     } finally {
@@ -163,6 +170,18 @@ class HomeController extends GetxController {
     }
   }
 
+  Future<void> _loadCashInCashOutData() async {
+    final response = await ApiErrorHandler.call(
+      () => _cashInCashOutService.getEntriesSortedByDateDesc(),
+      fallbackMessage: 'Failed to load cash in/cash out data',
+      showErrorSnackbar: false,
+    );
+
+    if (response.isSuccess && response.data != null) {
+      _allCashFlowEntries.assignAll(response.data!);
+    }
+  }
+
   Future<void> _loadBalanceData() async {
     // ── Lifetime totals from trips/transactions (single calc pipeline) ──
     final totalFundOwedValue = _allTrips.fold(
@@ -179,11 +198,14 @@ class HomeController extends GetxController {
         totalFundOwedValue - totalPayments - totalCompanyExpenses;
 
     // ── Lifetime balance (cash-in-hand): payments − main-balance expenses
-    final totalFundReceivedValue = _sumTransactions(
+    final totalFundReceivedFromTransactions = _sumTransactions(
       _allTransactions,
       payments: true,
       mainBalanceExpenses: true,
     );
+    final totalFundReceivedValue =
+        totalFundReceivedFromTransactions +
+        _sumCashInCashOut(_allCashFlowEntries);
 
     // ── Monthly totals ─────────────────────────────────────────────────
     final now = DateTime.now();
@@ -199,11 +221,17 @@ class HomeController extends GetxController {
         .toList();
 
     // Monthly balance (cash-in-hand): payments − main-balance expenses
-    final monthlyFundReceivedValue = _sumTransactions(
+    final monthlyFundReceivedFromTransactions = _sumTransactions(
       monthlyTx,
       payments: true,
       mainBalanceExpenses: true,
     );
+    final monthlyCashFlowEntries = _allCashFlowEntries
+        .where((entry) => _isCurrentMonth(entry.date, now))
+        .toList();
+    final monthlyFundReceivedValue =
+        monthlyFundReceivedFromTransactions +
+        _sumCashInCashOut(monthlyCashFlowEntries);
 
     // Monthly due = billed − payments − company expenses
     final monthlyPayments = _sumByCategory(monthlyTx, 'payment');
@@ -302,6 +330,17 @@ class HomeController extends GetxController {
     return total;
   }
 
+  /// Compute main-balance adjustments from dedicated cash in/cash out entries.
+  int _sumCashInCashOut(List<CashInCashOutModel> entries) {
+    int total = 0;
+    for (final entry in entries) {
+      final amount = _toInt(entry.amount);
+      if (amount <= 0) continue;
+      total += entry.isCashOut ? -amount : amount;
+    }
+    return total;
+  }
+
   bool _isCurrentMonth(String dateStr, DateTime now) {
     final date = _parseDate(dateStr);
     return date != null && date.year == now.year && date.month == now.month;
@@ -393,5 +432,44 @@ class HomeController extends GetxController {
     if (!deleted) return;
     showAppSnackbar('Success', 'Transaction deleted successfully.');
   }
-}
 
+  Future<bool> deleteTripWithPassword({
+    required TripModel trip,
+    required String password,
+  }) async {
+    final trimmedPassword = password.trim();
+    if (trimmedPassword.isEmpty) {
+      showAppSnackbar('Error', 'Password is required');
+      return false;
+    }
+
+    final reauthResponse = await ApiErrorHandler.call(
+      () => _auth.reauthenticate(trimmedPassword),
+      fallbackMessage: 'Failed to verify password',
+    );
+    if (!reauthResponse.isSuccess) return false;
+
+    final deleteResponse = await ApiErrorHandler.call(
+      () => _tripService.deleteTrip(trip: trip),
+      fallbackMessage: 'Failed to delete trip',
+    );
+    if (!deleteResponse.isSuccess) return false;
+
+    await loadHomeData();
+    return true;
+  }
+
+  Future<void> onDeleteTripPressed(BuildContext context, TripModel trip) async {
+    final deleted = await showPasswordConfirmDeletionDialog(
+      context: context,
+      title: 'Delete Trip',
+      message:
+          'Enter your password to delete this trip bill of ৳ ${trip.totalBill}.',
+      onConfirm: (password) =>
+          deleteTripWithPassword(trip: trip, password: password),
+    );
+
+    if (!deleted) return;
+    showAppSnackbar('Success', 'Trip deleted successfully.');
+  }
+}

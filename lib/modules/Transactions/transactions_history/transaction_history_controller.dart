@@ -11,6 +11,7 @@ import '../../../core/services/firestore_services/tripdata_service.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../../modules/home/home_controller.dart';
 import '../../../routes/app_routes.dart';
+import '../../trip/trip_history/trip_hisotry_controller.dart';
 import '../models/transaction_model.dart';
 import '../utils/transaction_ledger_util.dart';
 
@@ -172,6 +173,12 @@ class TransactionHistoryController extends GetxController {
       transactions.removeWhere(
         (item) => item.transactionId == transaction.transactionId,
       );
+      if (Get.isRegistered<TripHistoryController>()) {
+        Get.find<TripHistoryController>().fetchTripsPage(
+          reset: true,
+          showLoader: false,
+        );
+      }
       if (Get.isRegistered<HomeController>()) {
         await Get.find<HomeController>().loadHomeData();
       }
@@ -214,6 +221,12 @@ class TransactionHistoryController extends GetxController {
   }
 
   List<TransactionModel> get visibleTransactions {
+    return _filterAndSortTransactions(transactions);
+  }
+
+  List<TransactionModel> _filterAndSortTransactions(
+    Iterable<TransactionModel> source,
+  ) {
     final query = searchQuery.value.trim().toLowerCase();
     final month = selectedMonth.value;
     final year = selectedYear.value;
@@ -221,7 +234,7 @@ class TransactionHistoryController extends GetxController {
     final selectedShipFilter = selectedShip.value.trim().toLowerCase();
     final dateFilter = selectedDate.value;
 
-    final filtered = transactions.where((transaction) {
+    final filtered = source.where((transaction) {
       final date = _parseDate(transaction.date);
 
       final monthMatch = month == 0 || (date != null && date.month == month);
@@ -270,9 +283,37 @@ class TransactionHistoryController extends GetxController {
     filtered.sort((left, right) {
       switch (sortOption.value) {
         case TransactionSortOption.newest:
-          return _safeDate(right.date).compareTo(_safeDate(left.date));
+          final dateCompare = _safeDate(
+            right.date,
+          ).compareTo(_safeDate(left.date));
+          if (dateCompare != 0) {
+            return dateCompare;
+          }
+
+          final createdAtCompare = _safeCreatedAt(
+            right,
+          ).compareTo(_safeCreatedAt(left));
+          if (createdAtCompare != 0) {
+            return createdAtCompare;
+          }
+
+          return right.transactionId.compareTo(left.transactionId);
         case TransactionSortOption.oldest:
-          return _safeDate(left.date).compareTo(_safeDate(right.date));
+          final dateCompare = _safeDate(
+            left.date,
+          ).compareTo(_safeDate(right.date));
+          if (dateCompare != 0) {
+            return dateCompare;
+          }
+
+          final createdAtCompare = _safeCreatedAt(
+            left,
+          ).compareTo(_safeCreatedAt(right));
+          if (createdAtCompare != 0) {
+            return createdAtCompare;
+          }
+
+          return left.transactionId.compareTo(right.transactionId);
         case TransactionSortOption.amountHighToLow:
           return _toDouble(right.amount).compareTo(_toDouble(left.amount));
         case TransactionSortOption.amountLowToHigh:
@@ -417,7 +458,19 @@ class TransactionHistoryController extends GetxController {
   }
 
   Future<void> exportFilteredLedgerPdf() async {
-    final ledgerTransactions = visibleTransactions;
+    await _ensureTripShipIndexLoaded();
+
+    final response = await ApiErrorHandler.call<List<TransactionModel>>(
+      () => _transactionService.getTransactions(),
+      fallbackMessage: 'Failed to load full transaction history for export',
+      showErrorSnackbar: true,
+    );
+
+    if (!response.isSuccess || response.data == null) {
+      return;
+    }
+
+    final ledgerTransactions = _filterAndSortTransactions(response.data!);
     if (ledgerTransactions.isEmpty) {
       showAppSnackbar(
         'No Transactions',
@@ -520,6 +573,10 @@ class TransactionHistoryController extends GetxController {
 
   DateTime _safeDate(String value) {
     return _parseDate(value) ?? DateTime(1970);
+  }
+
+  DateTime _safeCreatedAt(TransactionModel transaction) {
+    return transaction.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
   }
 
   DateTime? _parseDate(String raw) {

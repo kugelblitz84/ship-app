@@ -174,6 +174,10 @@ class CompanyDetailsView extends GetView<CompanyDetailsController> {
                               return _TripTile(
                                 trip: trip,
                                 onTap: () => controller.openTripDetails(trip),
+                                onDelete: () => controller.onDeleteTripPressed(
+                                  context,
+                                  trip,
+                                ),
                               );
                             },
                           ),
@@ -1020,10 +1024,11 @@ class _DetailRow extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _TripTile extends StatelessWidget {
-  const _TripTile({required this.trip, required this.onTap});
+  const _TripTile({required this.trip, required this.onTap, this.onDelete});
 
   final TripModel trip;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1109,10 +1114,25 @@ class _TripTile extends StatelessWidget {
                 ),
               ),
               SizedBox(width: 4.w),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 20.sp,
-                color: AppColors.neutral300,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (onDelete != null)
+                    IconButton(
+                      tooltip: 'Delete trip',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: onDelete,
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        color: AppColors.error,
+                      ),
+                    ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20.sp,
+                    color: AppColors.neutral300,
+                  ),
+                ],
               ),
             ],
           ),
@@ -1400,4 +1420,3 @@ double _listViewportHeight({
   final visibleItems = listLength < 5 ? listLength : 5;
   return itemHeight * visibleItems;
 }
-

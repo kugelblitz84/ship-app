@@ -23,23 +23,41 @@ class TripDetailsView extends GetView<TripDetailsController> {
             return const SizedBox.shrink();
           }
 
-          return TextButton.icon(
-            onPressed: controller.isSaving.value
-                ? null
-                : (controller.isEditing.value
-                      ? controller.cancelEditing
-                      : controller.startEditing),
-            icon: Icon(
-              controller.isEditing.value
-                  ? Icons.close_rounded
-                  : Icons.edit_outlined,
-              size: 18.sp,
-              color: Colors.white,
-            ),
-            label: Text(
-              controller.isEditing.value ? 'Cancel' : 'Edit',
-              style: AppTextStyles.labelSmall.copyWith(color: Colors.white),
-            ),
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: 'Delete trip',
+                onPressed:
+                    controller.isSaving.value || controller.isDeleting.value
+                    ? null
+                    : () => controller.onDeleteTripPressed(context),
+                icon: Icon(
+                  Icons.delete_outline_rounded,
+                  size: 20.sp,
+                  color: Colors.white,
+                ),
+              ),
+              TextButton.icon(
+                onPressed:
+                    controller.isSaving.value || controller.isDeleting.value
+                    ? null
+                    : (controller.isEditing.value
+                          ? controller.cancelEditing
+                          : controller.startEditing),
+                icon: Icon(
+                  controller.isEditing.value
+                      ? Icons.close_rounded
+                      : Icons.edit_outlined,
+                  size: 18.sp,
+                  color: Colors.white,
+                ),
+                label: Text(
+                  controller.isEditing.value ? 'Cancel' : 'Edit',
+                  style: AppTextStyles.labelSmall.copyWith(color: Colors.white),
+                ),
+              ),
+            ],
           );
         }),
       ],
@@ -76,7 +94,7 @@ class TripDetailsView extends GetView<TripDetailsController> {
               title: 'Editing Trip',
               subtitle: '${_safeText(trip.from)} → ${_safeText(trip.to)}',
               icon: Icons.edit_rounded,
-              height: 160,
+              height: 165,
             ),
             SizedBox(height: AppSpacing.lg),
 

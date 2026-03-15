@@ -58,4 +58,3 @@ class SignupController extends GetxController {
     super.onClose();
   }
 }
-

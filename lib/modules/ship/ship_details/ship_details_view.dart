@@ -150,6 +150,8 @@ class ShipDetailsView extends GetView<ShipDetailsController> {
                           (trip) => _TripTile(
                             trip: trip,
                             onTap: () => controller.openTripDetails(trip),
+                            onDelete: () =>
+                                controller.onDeleteTripPressed(context, trip),
                           ),
                         )
                         .toList(),
@@ -364,10 +366,11 @@ class _DetailRow extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _TripTile extends StatelessWidget {
-  const _TripTile({required this.trip, required this.onTap});
+  const _TripTile({required this.trip, required this.onTap, this.onDelete});
 
   final TripModel trip;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -430,10 +433,25 @@ class _TripTile extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 20.sp,
-                color: AppColors.neutral300,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (onDelete != null)
+                    IconButton(
+                      tooltip: 'Delete trip',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: onDelete,
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        color: AppColors.error,
+                      ),
+                    ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20.sp,
+                    color: AppColors.neutral300,
+                  ),
+                ],
               ),
             ],
           ),

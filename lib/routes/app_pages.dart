@@ -7,6 +7,8 @@ import '../modules/company/company_details/company_details_controller.dart';
 import '../modules/company/company_details/company_details_view.dart';
 import '../modules/company/company_list/company_list_controller.dart';
 import '../modules/company/company_list/company_list_view.dart';
+import '../modules/cashin_cashout/cash_in_cash_out_controller.dart';
+import '../modules/cashin_cashout/cash_in_cash_out_view.dart';
 import '../modules/Transactions/expenses/add_transaction/add_expenses_transaction_controller.dart';
 import '../modules/Transactions/expenses/add_transaction/add_expenses_transaction_view.dart';
 import '../modules/Transactions/payments/add_transaction/add_payment_transaction_controller.dart';
@@ -171,6 +173,13 @@ class AppPages {
       page: () => const AddExpensesTransactionView(),
       binding: BindingsBuilder(() {
         Get.lazyPut(() => AddExpensesTransactionController());
+      }),
+    ),
+    GetPage(
+      name: AppRoutes.cashInCashOut,
+      page: () => const CashInCashOutView(),
+      binding: BindingsBuilder(() {
+        Get.lazyPut(() => CashInCashOutController());
       }),
     ),
     GetPage(

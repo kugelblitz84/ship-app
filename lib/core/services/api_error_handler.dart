@@ -58,7 +58,8 @@ class ApiErrorHandler {
         showAppSnackbar('Error', errorMsg);
       }
       return ApiResponse<T>(error: errorMsg, isSuccess: false);
-    } catch (_) {
+    } catch (err) {
+      debugPrint('API call unexpected error: ${err.toString()}');
       if (showErrorSnackbar && !_shouldSuppressOfflineSnackbar) {
         showAppSnackbar('Error', fallbackMessage);
       }
@@ -129,4 +130,3 @@ class OtpMailerErrorHandler {
     }
   }
 }
-

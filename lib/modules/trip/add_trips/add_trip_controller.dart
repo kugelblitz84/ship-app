@@ -363,4 +363,3 @@ class AddTripController extends GetxController {
     selectedShipName.value = null;
   }
 }
-

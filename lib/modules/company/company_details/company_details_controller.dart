@@ -477,8 +477,61 @@ class CompanyDetailsController extends GetxController {
     await loadCompanyDetails();
   }
 
-  void openTripDetails(TripModel trip) {
-    Get.toNamed(AppRoutes.tripDetails, arguments: trip);
+  Future<bool> deleteTripWithPassword({
+    required TripModel trip,
+    required String password,
+  }) async {
+    if (isDeleting.value) return false;
+
+    final trimmedPassword = password.trim();
+    if (trimmedPassword.isEmpty) {
+      showAppSnackbar('Error', 'Password is required');
+      return false;
+    }
+
+    isDeleting.value = true;
+    try {
+      final reauthResponse = await ApiErrorHandler.call(
+        () => _authService.reauthenticate(trimmedPassword),
+        fallbackMessage: 'Failed to verify password',
+      );
+      if (!reauthResponse.isSuccess) return false;
+
+      final deleteResponse = await ApiErrorHandler.call(
+        () => _tripService.deleteTrip(trip: trip),
+        fallbackMessage: 'Failed to delete trip',
+      );
+      if (!deleteResponse.isSuccess) return false;
+
+      await loadCompanyDetails();
+      if (Get.isRegistered<HomeController>()) {
+        await Get.find<HomeController>().loadHomeData();
+      }
+      return true;
+    } finally {
+      isDeleting.value = false;
+    }
+  }
+
+  Future<void> onDeleteTripPressed(BuildContext context, TripModel trip) async {
+    final deleted = await showPasswordConfirmDeletionDialog(
+      context: context,
+      title: 'Delete Trip',
+      message:
+          'Enter your password to delete this trip bill of ৳ ${_formatAmount(_toDouble(trip.totalBill))}.',
+      onConfirm: (password) =>
+          deleteTripWithPassword(trip: trip, password: password),
+    );
+
+    if (!deleted) return;
+    showAppSnackbar('Success', 'Trip deleted successfully.');
+  }
+
+  Future<void> openTripDetails(TripModel trip) async {
+    final result = await Get.toNamed(AppRoutes.tripDetails, arguments: trip);
+    if (result == true) {
+      await loadCompanyDetails();
+    }
   }
 
   Future<void> openTransactionDetails(TransactionModel transaction) async {
@@ -647,4 +700,3 @@ class CompanyDetailsController extends GetxController {
     return null;
   }
 }
-

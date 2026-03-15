@@ -10,6 +10,7 @@ class AppRoutes {
   static const String addTrip = '/add-trip';
   static const String addTransaction = '/add-transaction';
   static const String addExpensesTransaction = '/add-expenses-transaction';
+  static const String cashInCashOut = '/cash-in-cash-out';
   static const String transactionHistory = '/transaction-history';
   static const String transactionDetails = '/transaction-details';
   static const String tripHistory = '/trip-history';

@@ -557,4 +557,3 @@ class AddTransactionView extends GetView<AddTransactionController> {
     );
   }
 }
-

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TransactionModel {
   String transactionId;
@@ -14,6 +15,7 @@ class TransactionModel {
   String totalPrice;
   String amountDue;
   final String date;
+  final DateTime? createdAt;
   String type;
 
   TransactionModel({
@@ -29,6 +31,7 @@ class TransactionModel {
     required this.totalPrice,
     required this.amountDue,
     required this.date,
+    this.createdAt,
     required this.type,
   });
 
@@ -63,6 +66,14 @@ class TransactionModel {
 
     String formatAmount(double value) {
       return value.toInt().toString();
+    }
+
+    DateTime? parseCreatedAt(dynamic value) {
+      if (value == null) return null;
+      if (value is Timestamp) return value.toDate();
+      if (value is DateTime) return value;
+      if (value is String) return DateTime.tryParse(value);
+      return null;
     }
 
     final companyName = readString(companyAndShipInfoMap['companyName']).trim();
@@ -150,6 +161,7 @@ class TransactionModel {
       totalPrice: formatAmount(resolvedTotalPrice),
       amountDue: formatAmount(resolvedAmountDue),
       date: readString(map['date']),
+      createdAt: parseCreatedAt(map['createdAt']),
       type: readString(map['type']),
     );
   }

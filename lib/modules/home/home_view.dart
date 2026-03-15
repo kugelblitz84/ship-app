@@ -81,204 +81,202 @@ class HomeView extends GetView<HomeController> {
       _HomeLayoutSize.desktop => 28.h,
     };
 
+    final compactHeader = layout == _HomeLayoutSize.mobile;
+    final avatarSize = compactHeader ? 50.w : 58.w;
+    final greetingStyle = compactHeader
+        ? AppTextStyles.headlineSmall.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          )
+        : AppTextStyles.headlineMedium.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          );
+
     return SliverAppBar(
       expandedHeight: layout == _HomeLayoutSize.desktop ? 255.h : 230.h,
       floating: false,
       pinned: true,
-      elevation: 0,
+      stretch: true,
       backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
       leading: Builder(
         builder: (context) => IconButton(
           icon: const Icon(Icons.menu_rounded, color: Colors.white),
           onPressed: () => Scaffold.of(context).openDrawer(),
         ),
       ),
+      title: Text(
+        'MarineLedger',
+        style: AppTextStyles.labelMedium.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
       actions: [
         IconButton(
+          tooltip: 'Refresh',
           icon: const Icon(Icons.refresh_rounded, color: Colors.white),
           onPressed: controller.onRefresh,
-          tooltip: 'Refresh',
-        ),
-        IconButton(
-          icon: const Icon(Icons.logout_rounded, color: Colors.white),
-          onPressed: controller.onLogoutPressed,
-          tooltip: 'Sign Out',
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
-        background: LayoutBuilder(
-          builder: (context, constraints) {
-            final compactHeader = constraints.maxHeight < 235;
-            final topPadding = compactHeader ? 12.h : verticalTopPadding;
-            final bottomInset = compactHeader ? 8.h : bottomPadding;
-            final avatarSize = compactHeader ? 42.0 : 48.w;
-            final greetingStyle = compactHeader
-                ? AppTextStyles.headlineSmall.copyWith(color: Colors.white)
-                : AppTextStyles.headlineMedium.copyWith(color: Colors.white);
-
-            return Container(
-              decoration: const BoxDecoration(gradient: AppColors.heroGradient),
-              child: SafeArea(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    horizontalPadding,
-                    topPadding,
-                    horizontalPadding,
-                    bottomInset,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    mainAxisSize: MainAxisSize.min,
+        collapseMode: CollapseMode.parallax,
+        background: Container(
+          decoration: const BoxDecoration(gradient: AppColors.heroGradient),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                verticalTopPadding,
+                horizontalPadding,
+                bottomPadding,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: avatarSize,
-                            height: avatarSize,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.15),
-                              borderRadius: AppRadius.md,
-                            ),
-                            child: Center(
-                              child: Text(
-                                name.isNotEmpty ? name[0].toUpperCase() : '?',
-                                style: AppTextStyles.headlineLarge.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
+                      Container(
+                        width: avatarSize,
+                        height: avatarSize,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: AppRadius.md,
+                        ),
+                        child: Center(
+                          child: Text(
+                            name.isNotEmpty ? name[0].toUpperCase() : '?',
+                            style: AppTextStyles.headlineLarge.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          SizedBox(width: 14.w),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '$greeting${name.isNotEmpty ? ', $name' : ''}',
-                                  style: greetingStyle,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      SizedBox(width: 14.w),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$greeting${name.isNotEmpty ? ', $name' : ''}',
+                              style: greetingStyle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (controller.isAdmin.value) ...[
+                              SizedBox(height: compactHeader ? 4.h : 6.h),
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 10.w,
+                                  vertical: compactHeader ? 3.h : 4.h,
                                 ),
-                                if (controller.isAdmin.value) ...[
-                                  SizedBox(height: compactHeader ? 4.h : 6.h),
-                                  Container(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 10.w,
-                                      vertical: compactHeader ? 3.h : 4.h,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.18,
-                                      ),
-                                      borderRadius: AppRadius.full,
-                                      border: Border.all(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.22,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.verified_user_rounded,
-                                          size: 14.sp,
-                                          color: Colors.white,
-                                        ),
-                                        SizedBox(width: 6.w),
-                                        Text(
-                                          'Admin',
-                                          style: AppTextStyles.caption.copyWith(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.18),
+                                  borderRadius: AppRadius.full,
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.22),
                                   ),
-                                ],
-                                if (org.isNotEmpty) ...[
-                                  SizedBox(height: 2.h),
-                                  Text(
-                                    org,
-                                    style: AppTextStyles.bodyMedium.copyWith(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.75,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.verified_user_rounded,
+                                      size: 14.sp,
+                                      color: Colors.white,
+                                    ),
+                                    SizedBox(width: 6.w),
+                                    Text(
+                                      'Admin',
+                                      style: AppTextStyles.caption.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                            if (org.isNotEmpty) ...[
+                              SizedBox(height: 2.h),
+                              Text(
+                                org,
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.75),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (!compactHeader) ...[
+                    SizedBox(height: 14.h),
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12.w,
+                        vertical: 10.h,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.14),
+                        borderRadius: AppRadius.md,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.16),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 26.w,
+                            height: 26.w,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: AppRadius.sm,
+                            ),
+                            child: Icon(
+                              Icons.account_balance_wallet_rounded,
+                              size: 14.sp,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(width: 8.w),
+                          Expanded(
+                            child: Text(
+                              'Lifetime Balance',
+                              style: AppTextStyles.caption.copyWith(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Obx(
+                            () => Text(
+                              '৳ ${controller.totalFundReceived}',
+                              style: AppTextStyles.labelMedium.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      if (!compactHeader) ...[
-                        SizedBox(height: 14.h),
-                        Container(
-                          width: double.infinity,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 12.w,
-                            vertical: 10.h,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.14),
-                            borderRadius: AppRadius.md,
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.16),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 26.w,
-                                height: 26.w,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.2),
-                                  borderRadius: AppRadius.sm,
-                                ),
-                                child: Icon(
-                                  Icons.account_balance_wallet_rounded,
-                                  size: 14.sp,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              SizedBox(width: 8.w),
-                              Expanded(
-                                child: Text(
-                                  'Lifetime Balance',
-                                  style: AppTextStyles.caption.copyWith(
-                                    color: Colors.white.withValues(alpha: 0.8),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Obx(
-                                () => Text(
-                                  '৳ ${controller.totalFundReceived}',
-                                  style: AppTextStyles.labelMedium.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+                    ),
+                  ],
+                ],
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
     );
@@ -367,7 +365,7 @@ class HomeView extends GetView<HomeController> {
             () => Get.toNamed(AppRoutes.tripHistory),
           ),
           SizedBox(height: 12.h),
-          _buildRecentTrips(),
+          _buildRecentTrips(context),
 
           SizedBox(height: 24.h),
 
@@ -414,7 +412,7 @@ class HomeView extends GetView<HomeController> {
                       () => Get.toNamed(AppRoutes.tripHistory),
                     ),
                     SizedBox(height: 12.h),
-                    _buildRecentTrips(),
+                    _buildRecentTrips(context),
                   ],
                 ),
               ),
@@ -472,7 +470,7 @@ class HomeView extends GetView<HomeController> {
                           () => Get.toNamed(AppRoutes.tripHistory),
                         ),
                         SizedBox(height: 12.h),
-                        _buildRecentTrips(),
+                        _buildRecentTrips(context),
                       ],
                     ),
                   ),
@@ -1007,6 +1005,12 @@ class HomeView extends GetView<HomeController> {
         onTap: () => Get.toNamed(AppRoutes.addTransaction),
       ),
       _QuickActionItem(
+        icon: Icons.account_balance_wallet_outlined,
+        label: 'Cash In/Out',
+        color: AppColors.warning,
+        onTap: () => Get.toNamed(AppRoutes.cashInCashOut),
+      ),
+      _QuickActionItem(
         icon: Icons.directions_boat_outlined,
         label: 'Add Ship',
         color: AppColors.info,
@@ -1131,7 +1135,7 @@ class HomeView extends GetView<HomeController> {
   // ═══════════════════════════════════════════════════════════════════════
   // RECENT TRIPS
   // ═══════════════════════════════════════════════════════════════════════
-  Widget _buildRecentTrips() {
+  Widget _buildRecentTrips(BuildContext context) {
     final trips = controller.recentTrips;
 
     if (trips.isEmpty) {
@@ -1152,7 +1156,7 @@ class HomeView extends GetView<HomeController> {
       child: Column(
         children: [
           for (int i = 0; i < trips.length; i++) ...[
-            _buildTripTile(trips[i]),
+            _buildTripTile(context, trips[i]),
             if (i < trips.length - 1)
               Divider(
                 height: 1,
@@ -1166,11 +1170,19 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  Widget _buildTripTile(TripModel trip) {
+  Widget _buildTripTile(BuildContext context, TripModel trip) {
     final totalBill = trip.totalBill;
 
     return InkWell(
-      onTap: () => Get.toNamed(AppRoutes.tripDetails, arguments: trip),
+      onTap: () async {
+        final result = await Get.toNamed(
+          AppRoutes.tripDetails,
+          arguments: trip,
+        );
+        if (result == true) {
+          await controller.loadHomeData();
+        }
+      },
       borderRadius: AppRadius.lg,
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
@@ -1213,11 +1225,26 @@ class HomeView extends GetView<HomeController> {
               ),
             ),
             SizedBox(width: 8.w),
-            Text(
-              '৳ $totalBill',
-              style: AppTextStyles.labelMedium.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Delete trip',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () =>
+                      controller.onDeleteTripPressed(context, trip),
+                  icon: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: AppColors.error,
+                  ),
+                ),
+                Text(
+                  '৳ $totalBill',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1569,6 +1596,15 @@ class HomeView extends GetView<HomeController> {
                         Get.toNamed(AppRoutes.transactionHistory);
                       },
                     ),
+                    _buildDrawerItem(
+                      Icons.account_balance_wallet_rounded,
+                      'Cash In Cash Out',
+                      false,
+                      () {
+                        Get.back();
+                        Get.toNamed(AppRoutes.cashInCashOut);
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -1666,6 +1702,20 @@ class HomeView extends GetView<HomeController> {
             onTap: () {
               Get.back();
               Get.toNamed(AppRoutes.addExpensesTransaction);
+            },
+          ),
+          ListTile(
+            dense: true,
+            shape: RoundedRectangleBorder(borderRadius: AppRadius.sm),
+            leading: Icon(
+              Icons.arrow_right_rounded,
+              color: AppColors.neutral500,
+              size: 20.sp,
+            ),
+            title: Text('Cash In/Cash Out', style: AppTextStyles.bodyMedium),
+            onTap: () {
+              Get.back();
+              Get.toNamed(AppRoutes.cashInCashOut);
             },
           ),
         ],

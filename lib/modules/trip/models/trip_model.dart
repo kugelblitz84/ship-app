@@ -23,17 +23,28 @@ class TripModel {
     this.product,
   });
 
-  factory TripModel.fromMap(Map<String, dynamic> map) {
+  factory TripModel.fromMap(
+    Map<String, dynamic> map, {
+    String? fallbackTripId,
+  }) {
     String readString(String key) {
       final value = map[key];
       if (value == null) return '';
       return value.toString();
     }
 
+    var tripIdValue = readString('tripId').trim();
+    if (tripIdValue.isEmpty) {
+      tripIdValue = readString('id').trim();
+    }
+    if (tripIdValue.isEmpty) {
+      tripIdValue = (fallbackTripId ?? '').trim();
+    }
+
     final companyAndShipValue = map['companyAndShipInfo'];
     if (companyAndShipValue is! Map<String, dynamic>) {
       debugPrint(
-        'TripModel.fromMap: missing/invalid companyAndShipInfo for tripId=${readString('tripId')}',
+        'TripModel.fromMap: missing/invalid companyAndShipInfo for tripId=$tripIdValue',
       );
     }
     final companyAndShipMap = companyAndShipValue is Map<String, dynamic>
@@ -46,7 +57,7 @@ class TripModel {
 
     if (shipName.isEmpty || companyName.isEmpty) {
       debugPrint(
-        'TripModel.fromMap: empty company/ship name for tripId=${readString('tripId')} (companyName="$companyName", shipName="$shipName")',
+        'TripModel.fromMap: empty company/ship name for tripId=$tripIdValue (companyName="$companyName", shipName="$shipName")',
       );
     }
 
@@ -92,7 +103,7 @@ class TripModel {
     }
 
     return TripModel(
-      tripId: readString('tripId'),
+      tripId: tripIdValue,
       from: readString('from'),
       to: readString('to'),
       date: readString('date'),

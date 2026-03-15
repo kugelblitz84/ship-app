@@ -66,4 +66,3 @@ class AddShipController extends GetxController {
     super.onClose();
   }
 }
-

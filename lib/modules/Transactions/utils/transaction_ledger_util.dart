@@ -170,8 +170,9 @@ class TransactionLedgerUtil {
     for (final tx in transactions) {
       final trip = _tripForTransaction(tx, tripById);
       final amount = _toDouble(tx.amount);
+      final mainBalanceExpense = tx.isMainBalanceExpense ? amount : 0.0;
       final credit = tx.isTrip ? _tripCreditValue(tx, trip) : 0.0;
-      final debit = tx.isTrip ? 0.0 : amount;
+      final debit = tx.isTrip || tx.isMainBalanceExpense ? 0.0 : amount;
       final method = _labelType(tx.type);
       final company = _companyLabel(tx, trip);
       final ship = _shipLabel(tx, trip);
@@ -192,6 +193,7 @@ class TransactionLedgerUtil {
           description: description,
           product: _ledgerProductInfo(trip),
           debit: debit,
+          mainBalanceExpense: mainBalanceExpense,
           credit: credit,
           kindOrder: tx.isTrip ? 0 : 1,
         ),
@@ -219,12 +221,14 @@ class TransactionLedgerUtil {
     final entries = <_LedgerEntry>[];
     var running = 0.0;
     var totalDebit = 0.0;
+    var totalMainBalanceExpense = 0.0;
     var totalCredit = 0.0;
     var id = 0;
 
     for (final item in items) {
       id += 1;
       totalDebit += item.debit;
+      totalMainBalanceExpense += item.mainBalanceExpense;
       totalCredit += item.credit;
       running = running + item.debit - item.credit;
 
@@ -235,6 +239,7 @@ class TransactionLedgerUtil {
           description: item.description,
           product: item.product,
           debit: item.debit,
+          mainBalanceExpense: item.mainBalanceExpense,
           credit: item.credit,
           balance: running,
         ),
@@ -244,6 +249,7 @@ class TransactionLedgerUtil {
     return _LedgerBuildResult(
       entries: entries,
       totalDebit: totalDebit,
+      totalMainBalanceExpense: totalMainBalanceExpense,
       totalCredit: totalCredit,
       closingBalance: running,
     );
@@ -565,6 +571,7 @@ class TransactionLedgerUtil {
           _cell('Date', header: true),
           _cell('Description', header: true),
           _cell('Product Info', header: true),
+          _mainBalanceHeaderCell(),
           _cell('Debit', header: true, right: true),
           _cell('Credit', header: true, right: true),
           _cell('Balance', header: true, right: true),
@@ -582,6 +589,7 @@ class TransactionLedgerUtil {
             _cell(''),
             _cell('', right: true),
             _cell('', right: true),
+            _cell('', right: true),
             _cell(_formatAmount(ledger.closingBalance), right: true),
           ],
         ),
@@ -596,6 +604,12 @@ class TransactionLedgerUtil {
             _cell(row.date),
             _cell(row.description, maxLines: 8),
             _cell(row.product, maxLines: 8),
+            _cell(
+              row.mainBalanceExpense > 0
+                  ? _formatAmount(row.mainBalanceExpense)
+                  : '',
+              right: true,
+            ),
             _cell(row.debit > 0 ? _formatAmount(row.debit) : '', right: true),
             _cell(row.credit > 0 ? _formatAmount(row.credit) : '', right: true),
             _cell(_formatAmount(row.balance), right: true),
@@ -613,6 +627,12 @@ class TransactionLedgerUtil {
             _cell('', color: PdfColors.white),
             _cell('Closing Balance', color: PdfColors.white, bold: true),
             _cell('', color: PdfColors.white),
+            _cell(
+              _formatAmount(ledger.totalMainBalanceExpense),
+              right: true,
+              color: PdfColors.white,
+              bold: true,
+            ),
             _cell(
               _formatAmount(ledger.totalDebit),
               right: true,
@@ -641,11 +661,12 @@ class TransactionLedgerUtil {
       columnWidths: const {
         0: pw.FlexColumnWidth(0.8),
         1: pw.FlexColumnWidth(1.3),
-        2: pw.FlexColumnWidth(2.9),
-        3: pw.FlexColumnWidth(2.2),
-        4: pw.FlexColumnWidth(1.25),
-        5: pw.FlexColumnWidth(1.25),
-        6: pw.FlexColumnWidth(1.3),
+        2: pw.FlexColumnWidth(2.6),
+        3: pw.FlexColumnWidth(2.0),
+        4: pw.FlexColumnWidth(1.45),
+        5: pw.FlexColumnWidth(1.15),
+        6: pw.FlexColumnWidth(1.15),
+        7: pw.FlexColumnWidth(1.2),
       },
       children: rows,
     );
@@ -703,7 +724,7 @@ class TransactionLedgerUtil {
           ),
           pw.SizedBox(height: 6),
           pw.Text(
-            'This statement is generated from filtered transactions only. Trip entries are credit; all other entries are debit.',
+            'This statement is generated from filtered transactions only. Trip entries are credit. Main balance expenses are listed separately and excluded from debit/credit balance calculations.',
             style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
           ),
         ],
@@ -733,6 +754,35 @@ class TransactionLedgerUtil {
         ),
         maxLines: maxLines ?? (header ? 2 : 4),
         overflow: pw.TextOverflow.clip,
+      ),
+    );
+  }
+
+  static pw.Widget _mainBalanceHeaderCell() {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+      child: pw.RichText(
+        textAlign: pw.TextAlign.right,
+        text: pw.TextSpan(
+          children: [
+            pw.TextSpan(
+              text: 'Expenses ',
+              style: pw.TextStyle(
+                fontSize: 9.2,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blueGrey900,
+              ),
+            ),
+            pw.TextSpan(
+              text: 'main balance',
+              style: pw.TextStyle(
+                fontSize: 8.0,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.grey600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -944,6 +994,7 @@ class _LedgerRawItem {
     required this.description,
     required this.product,
     required this.debit,
+    required this.mainBalanceExpense,
     required this.credit,
     required this.kindOrder,
   });
@@ -952,6 +1003,7 @@ class _LedgerRawItem {
   final String description;
   final String product;
   final double debit;
+  final double mainBalanceExpense;
   final double credit;
   final int kindOrder;
 
@@ -974,6 +1026,7 @@ class _LedgerEntry {
     required this.description,
     required this.product,
     required this.debit,
+    required this.mainBalanceExpense,
     required this.credit,
     required this.balance,
   });
@@ -983,6 +1036,7 @@ class _LedgerEntry {
   final String description;
   final String product;
   final double debit;
+  final double mainBalanceExpense;
   final double credit;
   final double balance;
 }
@@ -991,12 +1045,14 @@ class _LedgerBuildResult {
   _LedgerBuildResult({
     required this.entries,
     required this.totalDebit,
+    required this.totalMainBalanceExpense,
     required this.totalCredit,
     required this.closingBalance,
   });
 
   final List<_LedgerEntry> entries;
   final double totalDebit;
+  final double totalMainBalanceExpense;
   final double totalCredit;
   final double closingBalance;
 }

@@ -54,7 +54,7 @@ class TripHistoryView extends GetView<TripHistoryController> {
                   .map(
                     (trip) => Padding(
                       padding: EdgeInsets.only(bottom: AppSpacing.base),
-                      child: _TripCard(trip: trip),
+                      child: _TripCard(trip: trip, controller: controller),
                     ),
                   )
                   .toList(),
@@ -443,12 +443,20 @@ class _NoFilterResultState extends StatelessWidget {
 }
 
 class _TripCard extends StatelessWidget {
-  const _TripCard({required this.trip});
+  const _TripCard({required this.trip, required this.controller});
 
   final TripModel trip;
+  final TripHistoryController controller;
 
-  void _openDetails() {
-    Get.toNamed(AppRoutes.tripDetails, arguments: trip);
+  Future<void> _openDetails() async {
+    final result = await Get.toNamed(AppRoutes.tripDetails, arguments: trip);
+    if (result == true) {
+      await controller.fetchTripsPage(reset: true, showLoader: false);
+    }
+  }
+
+  Future<void> _deleteTrip(BuildContext context) async {
+    await controller.onDeleteTripPressed(context, trip);
   }
 
   @override
@@ -511,13 +519,27 @@ class _TripCard extends StatelessWidget {
                   ),
                 ),
                 SizedBox(width: AppSpacing.sm),
-                TextButton.icon(
-                  onPressed: _openDetails,
-                  icon: const Icon(Icons.open_in_new_rounded, size: 13),
-                  label: const Text(
-                    'View Details',
-                    style: TextStyle(fontSize: 13),
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Delete trip',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => _deleteTrip(context),
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        color: AppColors.error,
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _openDetails,
+                      icon: const Icon(Icons.open_in_new_rounded, size: 13),
+                      label: const Text(
+                        'View Details',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

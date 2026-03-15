@@ -73,4 +73,3 @@ class AddCompanyController extends GetxController {
     super.onClose();
   }
 }
-

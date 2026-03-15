@@ -16,6 +16,7 @@ class AppTextField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final FocusNode? focusNode;
   final bool autofocus;
+  final bool readOnly;
   final int maxLines;
 
   const AppTextField({
@@ -32,6 +33,7 @@ class AppTextField extends StatelessWidget {
     this.onChanged,
     this.focusNode,
     this.autofocus = false,
+    this.readOnly = false,
     this.maxLines = 1,
   });
 
@@ -59,6 +61,7 @@ class AppTextField extends StatelessWidget {
           onChanged: onChanged,
           focusNode: focusNode,
           autofocus: autofocus,
+          readOnly: readOnly,
           maxLines: maxLines,
           style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textPrimary),
           decoration: InputDecoration(
