@@ -65,6 +65,8 @@ class AddCompanyView extends GetView<AddCompanyController> {
                     maxLines: 4,
                     textInputAction: TextInputAction.next,
                   ),
+                  SizedBox(height: AppSpacing.base),
+                  Obx(() => _openingDueSection(context)),
                 ],
               ),
             ),
@@ -117,6 +119,109 @@ class AddCompanyView extends GetView<AddCompanyController> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _openingDueSection(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(14.w),
+      decoration: BoxDecoration(
+        color: AppColors.primarySurface,
+        borderRadius: AppRadius.md,
+        border: Border.all(color: AppColors.neutral200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.account_balance_wallet_outlined,
+                color: AppColors.primary,
+                size: 20.sp,
+              ),
+              SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Opening Due (optional)',
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    SizedBox(height: 2.h),
+                    Text(
+                      'Enable this if the company already owes money from earlier records.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.neutral700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: controller.includeOpeningDue.value,
+                onChanged: controller.onIncludeOpeningDueChanged,
+              ),
+            ],
+          ),
+          if (controller.includeOpeningDue.value) ...[
+            SizedBox(height: AppSpacing.base),
+            AppTextField(
+              controller: controller.openingDueAmountController,
+              label: 'Opening Due Amount',
+              hint: 'Enter amount',
+              prefixIcon: Icons.currency_exchange_rounded,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              textInputAction: TextInputAction.next,
+              validator: controller.openingDueAmountValidator(),
+            ),
+            SizedBox(height: AppSpacing.base),
+            _openingDueDateField(context),
+            SizedBox(height: AppSpacing.base),
+            AppTextField(
+              controller: controller.openingDueDescriptionController,
+              label: 'Opening Due Description (optional)',
+              hint: 'Example: Previous balance carried forward',
+              prefixIcon: Icons.notes_rounded,
+              maxLines: 3,
+              textInputAction: TextInputAction.done,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _openingDueDateField(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Opening Due Date',
+          style: AppTextStyles.labelMedium.copyWith(
+            color: AppColors.textPrimary,
+          ),
+        ),
+        SizedBox(height: 8.h),
+        TextFormField(
+          controller: controller.openingDueDateController,
+          readOnly: true,
+          onTap: () => controller.onPickOpeningDueDatePressed(context),
+          validator: controller.openingDueDateValidator(),
+          decoration: const InputDecoration(
+            hintText: 'YYYY-MM-DD',
+            prefixIcon: Icon(Icons.calendar_today_outlined),
+            suffixIcon: Icon(Icons.edit_calendar_outlined),
+          ),
+        ),
+      ],
     );
   }
 }

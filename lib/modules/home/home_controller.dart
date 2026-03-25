@@ -183,11 +183,12 @@ class HomeController extends GetxController {
   }
 
   Future<void> _loadBalanceData() async {
+    final openingDueTotal = _sumOpeningDueTransactions(_allTransactions);
+
     // ── Lifetime totals from trips/transactions (single calc pipeline) ──
-    final totalFundOwedValue = _allTrips.fold(
-      0,
-      (sum, trip) => sum + _toInt(trip.totalBill),
-    );
+    final totalFundOwedValue =
+        _allTrips.fold(0, (sum, trip) => sum + _toInt(trip.totalBill)) +
+        openingDueTotal;
     final totalPayments = _sumByCategory(_allTransactions, 'payment');
     final totalCompanyExpenses = _sumByCategory(
       _allTransactions,
@@ -219,6 +220,10 @@ class HomeController extends GetxController {
     final monthlyTx = _allTransactions
         .where((t) => _isCurrentMonth(t.date, now))
         .toList();
+    final monthlyOpeningDueTotal = _sumOpeningDueTransactions(monthlyTx);
+
+    final monthlyFundOwedWithOpeningDue =
+        monthlyFundOwedValue + monthlyOpeningDueTotal;
 
     // Monthly balance (cash-in-hand): payments − main-balance expenses
     final monthlyFundReceivedFromTransactions = _sumTransactions(
@@ -241,16 +246,35 @@ class HomeController extends GetxController {
       source: 'company',
     );
     final monthlyTotalDueValue =
-        monthlyFundOwedValue - monthlyPayments - monthlyCompanyExpenses;
+        monthlyFundOwedWithOpeningDue -
+        monthlyPayments -
+        monthlyCompanyExpenses;
 
     _updateHomeModel(
       totalFundOwed: totalFundOwedValue,
       totalFundReceived: totalFundReceivedValue,
       totalDue: totalDueValue < 0 ? 0 : totalDueValue,
-      monthlyFundOwed: monthlyFundOwedValue,
+      monthlyFundOwed: monthlyFundOwedWithOpeningDue,
       monthlyFundReceived: monthlyFundReceivedValue,
       monthlyTotalDue: monthlyTotalDueValue < 0 ? 0 : monthlyTotalDueValue,
     );
+  }
+
+  int _sumOpeningDueTransactions(List<TransactionModel> txns) {
+    int total = 0;
+    for (final t in txns) {
+      if (!t.isTrip) continue;
+      if (t.tripId.trim().isNotEmpty) continue;
+      final from = t.tripFrom.trim().toLowerCase();
+      final to = t.tripTo.trim().toLowerCase();
+      if (from != 'opening due' || to != 'opening balance') continue;
+
+      final amount = _toInt(t.amount);
+      if (amount > 0) {
+        total += amount;
+      }
+    }
+    return total;
   }
 
   void _updateHomeModel({

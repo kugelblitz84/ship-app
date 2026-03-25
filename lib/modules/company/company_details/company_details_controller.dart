@@ -120,10 +120,14 @@ class CompanyDetailsController extends GetxController {
   }
 
   double get totalAmountDue {
-    // final companyValue = _toDouble(company?.totalAmountDue);
-    // if (companyValue != 0) return companyValue;
+    final storedDue = _toDouble(company?.totalAmountDue);
+    if (storedDue > 0) {
+      return storedDue;
+    }
 
-    return (totalAmountBilled - totalAmountReceived) -
+    final openingDue = _toDouble(company?.openingDueAmount);
+    return openingDue +
+        (totalAmountBilled - totalAmountReceived) -
         totalAmountCompanyAddedExpenses;
   }
 

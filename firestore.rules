@@ -5,33 +5,307 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function currentUserEmail() {
+    function authUid() {
+      return isSignedIn() ? request.auth.uid : null;
+    }
+
+    function authEmail() {
       return isSignedIn() ? request.auth.token.email : null;
+    }
+
+    function authEmailLower() {
+      return authEmail() != null ? authEmail().lower() : null;
+    }
+
+    function hasAdminGrant(emailKey) {
+      return emailKey != null &&
+        exists(/databases/$(database)/documents/admins/$(emailKey)) &&
+        get(/databases/$(database)/documents/admins/$(emailKey)).data.isAdmin == true;
     }
 
     function isAdmin() {
       return isSignedIn() &&
-          currentUserEmail() != null &&
-          exists(/databases/$(database)/documents/admins/$(currentUserEmail())) &&
-          get(/databases/$(database)/documents/admins/$(currentUserEmail())).data.isAdmin == true;
+        (hasAdminGrant(authEmail()) || hasAdminGrant(authEmailLower()));
     }
 
-    function isOwner(uid) {
-      return isSignedIn() && request.auth.uid == uid;
+    function isPathOwner(uid) {
+      return isSignedIn() && authUid() == uid;
+    }
+
+    function emailMatchesAuth(emailValue) {
+      return emailValue is string &&
+        authEmail() != null &&
+        (emailValue == authEmail() || emailValue.lower() == authEmailLower());
+    }
+
+    function existingUserDocMatchesAuth() {
+      return (
+        resource.data.uid is string && resource.data.uid == authUid()
+      ) || (
+        resource.data.email is string && emailMatchesAuth(resource.data.email)
+      );
+    }
+
+    function incomingUserDocMatchesAuth() {
+      return (
+        request.resource.data.uid is string && request.resource.data.uid == authUid()
+      ) || (
+        request.resource.data.email is string && emailMatchesAuth(request.resource.data.email)
+      );
+    }
+
+    function isOwnerUserProfile(uid) {
+      return isPathOwner(uid) || existingUserDocMatchesAuth();
+    }
+
+    function isTimestampOrAbsent(data, key) {
+      return !data.keys().hasAny([key]) || data[key] is timestamp;
+    }
+
+    function isAmountString(value) {
+      return value is string && value.size() > 0 && value.size() <= 40 && value.matches('^-?\\d+(\\.\\d+)?$');
+    }
+
+    function isShortString(value, maxLen) {
+      return value is string && value.size() <= maxLen;
+    }
+
+    function validCompanyAndShipInfo(data) {
+      return data is map &&
+        data.keys().hasOnly(['companyName', 'shipName']) &&
+        (!data.keys().hasAny(['companyName']) || isShortString(data.companyName, 200)) &&
+        (!data.keys().hasAny(['shipName']) || isShortString(data.shipName, 200));
+    }
+
+    function validTripInfo(data) {
+      return data is map &&
+        data.keys().hasOnly(['from', 'to']) &&
+        (!data.keys().hasAny(['from']) || isShortString(data.from, 200)) &&
+        (!data.keys().hasAny(['to']) || isShortString(data.to, 200));
+    }
+
+    function validTripProduct(data) {
+      return data == null || (
+        data is map &&
+        data.keys().hasOnly(['productName', 'desctription', 'description', 'quantity', 'unit']) &&
+        (!data.keys().hasAny(['productName']) || isShortString(data.productName, 200)) &&
+        (!data.keys().hasAny(['desctription']) || isShortString(data.desctription, 500)) &&
+        (!data.keys().hasAny(['description']) || isShortString(data.description, 500)) &&
+        (!data.keys().hasAny(['quantity']) || isShortString(data.quantity, 60)) &&
+        (!data.keys().hasAny(['unit']) || isShortString(data.unit, 60))
+      );
+    }
+
+    function validAdminUserCreate() {
+      return request.resource.data.keys().hasOnly(['uid', 'isBlocked', 'updatedAt']) &&
+        request.resource.data.uid is string &&
+        request.resource.data.isBlocked is bool &&
+        isTimestampOrAbsent(request.resource.data, 'updatedAt');
+    }
+
+    function validAdminUserUpdate() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(['uid', 'isBlocked', 'updatedAt']) &&
+        (!request.resource.data.keys().hasAny(['uid']) || request.resource.data.uid is string) &&
+        (!request.resource.data.keys().hasAny(['isBlocked']) || request.resource.data.isBlocked is bool) &&
+        isTimestampOrAbsent(request.resource.data, 'updatedAt');
+    }
+
+    function validOwnerUserCreate(uid) {
+      return request.resource.data.keys().hasOnly([
+          'uid', 'email', 'username', 'org', 'phone', 'isBlocked', 'isVerified', 'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.uid is string &&
+        request.resource.data.uid == authUid() &&
+        request.resource.data.uid == uid &&
+        (!request.resource.data.keys().hasAny(['email']) || emailMatchesAuth(request.resource.data.email)) &&
+        (!request.resource.data.keys().hasAny(['isBlocked']) || request.resource.data.isBlocked == false) &&
+        (!request.resource.data.keys().hasAny(['isVerified']) || request.resource.data.isVerified is bool) &&
+        isTimestampOrAbsent(request.resource.data, 'createdAt') &&
+        isTimestampOrAbsent(request.resource.data, 'updatedAt');
+    }
+
+    function validOwnerUserUpdate() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'uid', 'username', 'org', 'phone', 'email', 'isVerified', 'updatedAt', 'createdAt'
+        ]) &&
+        request.resource.data.uid is string &&
+        request.resource.data.uid == authUid() &&
+        (!resource.data.keys().hasAny(['uid']) || request.resource.data.uid == resource.data.uid) &&
+        (!request.resource.data.keys().hasAny(['email']) || emailMatchesAuth(request.resource.data.email)) &&
+        (!request.resource.data.keys().hasAny(['isVerified']) || request.resource.data.isVerified is bool) &&
+        request.resource.data.isBlocked == resource.data.isBlocked &&
+        isTimestampOrAbsent(request.resource.data, 'createdAt') &&
+        isTimestampOrAbsent(request.resource.data, 'updatedAt');
+    }
+
+    function validCompanyDoc() {
+      return request.resource.data.keys().hasOnly([
+          'name', 'description', 'logoUrl', 'openingDueAmount', 'openingDueDate', 'openingDueDescription', 'totalAmountBilled', 'totalAmountReceived', 'totalAmountDue', 'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.name is string &&
+        isShortString(request.resource.data.name, 200) &&
+        (!request.resource.data.keys().hasAny(['description']) || isShortString(request.resource.data.description, 500)) &&
+        (!request.resource.data.keys().hasAny(['logoUrl']) || isShortString(request.resource.data.logoUrl, 2000)) &&
+        (!request.resource.data.keys().hasAny(['openingDueAmount']) || isAmountString(request.resource.data.openingDueAmount)) &&
+        (!request.resource.data.keys().hasAny(['openingDueDate']) || isShortString(request.resource.data.openingDueDate, 40)) &&
+        (!request.resource.data.keys().hasAny(['openingDueDescription']) || isShortString(request.resource.data.openingDueDescription, 2000)) &&
+        isAmountString(request.resource.data.totalAmountBilled) &&
+        isAmountString(request.resource.data.totalAmountReceived) &&
+        isAmountString(request.resource.data.totalAmountDue) &&
+        isTimestampOrAbsent(request.resource.data, 'createdAt') &&
+        isTimestampOrAbsent(request.resource.data, 'updatedAt');
+    }
+
+    function validShipDoc() {
+      return request.resource.data.keys().hasOnly(['name', 'licenseNumber', 'createdAt', 'updatedAt']) &&
+        request.resource.data.name is string &&
+        isShortString(request.resource.data.name, 200) &&
+        (!request.resource.data.keys().hasAny(['licenseNumber']) || isShortString(request.resource.data.licenseNumber, 120)) &&
+        isTimestampOrAbsent(request.resource.data, 'createdAt') &&
+        isTimestampOrAbsent(request.resource.data, 'updatedAt');
+    }
+
+    function validTripDoc(tripId) {
+      return request.resource.data.keys().hasOnly([
+          'tripId', 'from', 'to', 'date', 'isEdited', 'companyAndShipInfo', 'product', 'rate', 'totalBill', 'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.tripId is string &&
+        request.resource.data.tripId == tripId &&
+        isShortString(request.resource.data.from, 200) &&
+        isShortString(request.resource.data.to, 200) &&
+        isShortString(request.resource.data.date, 40) &&
+        request.resource.data.isEdited is bool &&
+        validCompanyAndShipInfo(request.resource.data.companyAndShipInfo) &&
+        validTripProduct(request.resource.data.product) &&
+        isShortString(request.resource.data.rate, 60) &&
+        isAmountString(request.resource.data.totalBill) &&
+        isTimestampOrAbsent(request.resource.data, 'createdAt') &&
+        isTimestampOrAbsent(request.resource.data, 'updatedAt');
+    }
+
+    function validTransactionMethodDoc(methodId) {
+      return request.resource.data.keys().hasOnly(['name', 'createdAt', 'updatedAt']) &&
+        request.resource.data.name is string &&
+        request.resource.data.name == methodId &&
+        isShortString(request.resource.data.name, 120) &&
+        isTimestampOrAbsent(request.resource.data, 'createdAt') &&
+        isTimestampOrAbsent(request.resource.data, 'updatedAt');
+    }
+
+    function validTransactionDoc(txId) {
+      return request.resource.data.keys().hasOnly([
+          'transactionId', 'transactionType', 'expenseSource', 'tripId', 'tripFrom', 'tripTo', 'tripInfo',
+          'description', 'amount', 'totalPrice', 'amountDue', 'date', 'type', 'companyAndShipInfo',
+          'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.transactionId is string &&
+        request.resource.data.transactionId == txId &&
+        ['payment', 'expenses', 'trips'].hasAny([request.resource.data.transactionType]) &&
+        request.resource.data.expenseSource is string &&
+        isShortString(request.resource.data.expenseSource, 40) &&
+        isShortString(request.resource.data.tripId, 200) &&
+        isShortString(request.resource.data.tripFrom, 200) &&
+        isShortString(request.resource.data.tripTo, 200) &&
+        validTripInfo(request.resource.data.tripInfo) &&
+        (!request.resource.data.keys().hasAny(['description']) || isShortString(request.resource.data.description, 2000)) &&
+        isAmountString(request.resource.data.amount) &&
+        isAmountString(request.resource.data.totalPrice) &&
+        isAmountString(request.resource.data.amountDue) &&
+        isShortString(request.resource.data.date, 40) &&
+        request.resource.data.type is string &&
+        isShortString(request.resource.data.type, 120) &&
+        validCompanyAndShipInfo(request.resource.data.companyAndShipInfo) &&
+        isTimestampOrAbsent(request.resource.data, 'createdAt') &&
+        isTimestampOrAbsent(request.resource.data, 'updatedAt');
+    }
+
+    function validCashFlowTypeDoc(typeId) {
+      return request.resource.data.keys().hasOnly(['name', 'createdAt', 'updatedAt']) &&
+        request.resource.data.name is string &&
+        request.resource.data.name == typeId &&
+        isShortString(request.resource.data.name, 120) &&
+        isTimestampOrAbsent(request.resource.data, 'createdAt') &&
+        isTimestampOrAbsent(request.resource.data, 'updatedAt');
+    }
+
+    function validCashEntryDoc(entryId) {
+      return request.resource.data.keys().hasOnly([
+          'entryId', 'flowType', 'transactionType', 'amount', 'date', 'note', 'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.entryId is string &&
+        request.resource.data.entryId == entryId &&
+        ['cash-in', 'cash-out'].hasAny([request.resource.data.flowType]) &&
+        request.resource.data.transactionType is string &&
+        isShortString(request.resource.data.transactionType, 120) &&
+        isAmountString(request.resource.data.amount) &&
+        isShortString(request.resource.data.date, 40) &&
+        (!request.resource.data.keys().hasAny(['note']) || isShortString(request.resource.data.note, 2000)) &&
+        isTimestampOrAbsent(request.resource.data, 'createdAt') &&
+        isTimestampOrAbsent(request.resource.data, 'updatedAt');
     }
 
     match /admins/{email} {
-      allow read: if isAdmin() || (isSignedIn() && currentUserEmail() == email);
+      allow read: if isAdmin() || (isSignedIn() && authEmail() != null && (email == authEmail() || email == authEmailLower()));
       allow write: if false;
     }
 
     match /users/{uid} {
-      allow read: if isOwner(uid) || isAdmin();
-      allow write: if isOwner(uid) || isAdmin();
+      allow read: if isAdmin() || isOwnerUserProfile(uid);
+
+      allow create: if isAdmin()
+        ? validAdminUserCreate()
+        : (isSignedIn() && incomingUserDocMatchesAuth() && validOwnerUserCreate(uid));
+
+      allow update: if isAdmin()
+        ? validAdminUserUpdate()
+        : (isOwnerUserProfile(uid) && validOwnerUserUpdate());
+
+      allow delete: if isAdmin() || isPathOwner(uid);
+
+      match /companies/{companyId} {
+        allow read: if isAdmin() || isPathOwner(uid);
+        allow create, update: if isPathOwner(uid) && validCompanyDoc();
+        allow delete: if isPathOwner(uid);
+      }
+
+      match /ships/{shipId} {
+        allow read: if isAdmin() || isPathOwner(uid);
+        allow create, update: if isPathOwner(uid) && validShipDoc();
+        allow delete: if isPathOwner(uid);
+      }
+
+      match /trips/{tripId} {
+        allow read: if isAdmin() || isPathOwner(uid);
+        allow create, update: if isPathOwner(uid) && validTripDoc(tripId);
+        allow delete: if isPathOwner(uid);
+      }
+
+      match /transactions/{txId} {
+        allow read: if isAdmin() || isPathOwner(uid);
+        allow create, update: if isPathOwner(uid) && validTransactionDoc(txId);
+        allow delete: if isPathOwner(uid);
+      }
+
+      match /transactionMethods/{methodId} {
+        allow read: if isAdmin() || isPathOwner(uid);
+        allow create, update: if isPathOwner(uid) && validTransactionMethodDoc(methodId);
+        allow delete: if isPathOwner(uid);
+      }
+
+      match /cashFlowTransactionTypes/{typeId} {
+        allow read: if isAdmin() || isPathOwner(uid);
+        allow create, update: if isPathOwner(uid) && validCashFlowTypeDoc(typeId);
+        allow delete: if isPathOwner(uid);
+      }
+
+      match /cashInCashOut/{entryId} {
+        allow read: if isAdmin() || isPathOwner(uid);
+        allow create, update: if isPathOwner(uid) && validCashEntryDoc(entryId);
+        allow delete: if isPathOwner(uid);
+      }
 
       match /{document=**} {
-        allow read: if isOwner(uid) || isAdmin();
-        allow write: if isOwner(uid);
+        allow read, write: if false;
       }
     }
 

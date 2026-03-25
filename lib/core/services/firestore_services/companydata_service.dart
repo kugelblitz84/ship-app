@@ -27,16 +27,27 @@ class FirestoreCompanyService extends GetxService {
 
   Future<String> AddCompany(Map<String, dynamic> companyData) async {
     final companyName = (companyData['name'] as String? ?? '').trim();
+    final openingDueAmount = _toDouble(companyData['openingDueAmount']);
+    final openingDueDate = (companyData['openingDueDate'] as String? ?? '')
+        .trim();
+    final openingDueDescription =
+        (companyData['openingDueDescription'] as String? ?? '').trim();
     final normalizedName = _normalizeNameKey(
       companyName,
       entityLabel: 'Company',
     );
     final companyDoc = _companiesCollection.doc(normalizedName);
+    final openingDueAmountFormatted = _formatAmount(openingDueAmount);
     final payload = <String, dynamic>{...companyData};
     payload['name'] = companyName;
-    payload['totalAmountBilled'] = '0';
+    payload['openingDueAmount'] = openingDueAmountFormatted;
+    payload['openingDueDate'] = openingDueAmount > 0 ? openingDueDate : '';
+    payload['openingDueDescription'] = openingDueAmount > 0
+        ? openingDueDescription
+        : '';
+    payload['totalAmountBilled'] = openingDueAmountFormatted;
     payload['totalAmountReceived'] = '0';
-    payload['totalAmountDue'] = '0';
+    payload['totalAmountDue'] = openingDueAmountFormatted;
     payload['createdAt'] = FieldValue.serverTimestamp();
 
     await _firestore.runTransaction((transaction) async {
@@ -50,6 +61,27 @@ class FirestoreCompanyService extends GetxService {
       }
 
       transaction.set(companyDoc, payload);
+
+      if (openingDueAmount > 0) {
+        final openingDueTxDoc = _transactionsCollection.doc();
+        transaction.set(openingDueTxDoc, {
+          'transactionId': openingDueTxDoc.id,
+          'transactionType': 'trips',
+          'expenseSource': 'company',
+          'tripId': '',
+          'tripFrom': 'Opening Due',
+          'tripTo': 'Opening Balance',
+          'tripInfo': {'from': 'Opening Due', 'to': 'Opening Balance'},
+          'description': openingDueDescription,
+          'amount': openingDueAmountFormatted,
+          'totalPrice': openingDueAmountFormatted,
+          'amountDue': openingDueAmountFormatted,
+          'date': openingDueDate,
+          'type': 'trip',
+          'companyAndShipInfo': {'companyName': companyName, 'shipName': ''},
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
     });
 
     return companyDoc.id;
@@ -211,6 +243,22 @@ class FirestoreCompanyService extends GetxService {
     }
 
     return normalized;
+  }
+
+  double _toDouble(dynamic value) {
+    if (value == null) return 0;
+    if (value is num) return value.toDouble();
+    final raw = value.toString().replaceAll(',', '').trim();
+    if (raw.isEmpty) return 0;
+    return double.tryParse(raw) ?? 0;
+  }
+
+  String _formatAmount(double value) {
+    final normalized = value < 0 ? 0 : value;
+    if (normalized % 1 == 0) {
+      return normalized.toInt().toString();
+    }
+    return normalized.toStringAsFixed(2).replaceFirst(RegExp(r'\.00$'), '');
   }
 
   String _requireUid() {

@@ -12,10 +12,10 @@ import '../../../core/services/download/download_service.dart';
 import '../../../core/services/firestore_services/userdata_service.dart';
 import '../../Transactions/models/transaction_model.dart' as tx_models;
 import '../../trip/models/trip_model.dart' as trip_models;
-import '../models/company_model.dart';
+import '../models/ship_model.dart';
 
-class CompanyStatementUtil {
-  CompanyStatementUtil._();
+class ShipStatementUtil {
+  ShipStatementUtil._();
 
   static const int _maxLedgerEntriesPerPage = 20;
   static const double _estimatedLedgerHeaderHeight = 26;
@@ -27,19 +27,19 @@ class CompanyStatementUtil {
   static final DownloadService _downloadService = createDownloadService();
 
   static Future<void> generateAndSavePdf({
-    required CompanyModel company,
+    required ShipModel ship,
     required List<trip_models.TripModel> trips,
     required List<tx_models.TransactionModel> transactions,
   }) async {
-    await saveCompanyStatementAndNotify(
-      company: company,
+    await saveShipStatementAndNotify(
+      ship: ship,
       trips: trips,
       transactions: transactions,
     );
   }
 
-  static Future<void> saveCompanyStatementAndNotify({
-    required CompanyModel company,
+  static Future<void> saveShipStatementAndNotify({
+    required ShipModel ship,
     required List<trip_models.TripModel> trips,
     required List<tx_models.TransactionModel> transactions,
     String? appliedFiltersLabel,
@@ -54,8 +54,8 @@ class CompanyStatementUtil {
     );
 
     try {
-      final savedFile = await saveCompanyStatementToFile(
-        company: company,
+      final savedFile = await saveShipStatementToFile(
+        ship: ship,
         trips: trips,
         transactions: transactions,
         appliedFiltersLabel: appliedFiltersLabel,
@@ -68,7 +68,7 @@ class CompanyStatementUtil {
       await _showSaveSuccessModal(
         context,
         savedFile,
-        company,
+        ship,
         trips,
         transactions,
       );
@@ -78,19 +78,19 @@ class CompanyStatementUtil {
       }
       _showErrorDialog(
         context,
-        'Unable to save company statement file. Please try again.',
+        'Unable to save ship statement file. Please try again.',
       );
     }
   }
 
-  static Future<GeneratedFileSaveResult> saveCompanyStatementToFile({
-    required CompanyModel company,
+  static Future<GeneratedFileSaveResult> saveShipStatementToFile({
+    required ShipModel ship,
     required List<trip_models.TripModel> trips,
     required List<tx_models.TransactionModel> transactions,
     String? appliedFiltersLabel,
   }) async {
-    final bytes = await buildCompanyStatementPdf(
-      company: company,
+    final bytes = await buildShipStatementPdf(
+      ship: ship,
       trips: trips,
       transactions: transactions,
       appliedFiltersLabel: appliedFiltersLabel,
@@ -98,7 +98,7 @@ class CompanyStatementUtil {
 
     final file = GeneratedFileData(
       bytes: bytes,
-      fileName: fileNameFor(company),
+      fileName: fileNameFor(ship),
       mimeType: 'application/pdf',
     );
 
@@ -107,7 +107,7 @@ class CompanyStatementUtil {
 
   static Future<void> openDownloadedStatement(
     GeneratedFileSaveResult savedFile, {
-    CompanyModel? company,
+    ShipModel? ship,
     List<trip_models.TripModel>? trips,
     List<tx_models.TransactionModel>? transactions,
   }) async {
@@ -121,10 +121,10 @@ class CompanyStatementUtil {
         return;
       }
 
-      if (company != null && trips != null && transactions != null) {
+      if (ship != null && trips != null && transactions != null) {
         Get.to(
-          () => CompanyStatementPreviewPage(
-            company: company,
+          () => ShipStatementPreviewPage(
+            ship: ship,
             trips: trips,
             transactions: transactions,
           ),
@@ -137,10 +137,10 @@ class CompanyStatementUtil {
         _showErrorDialog(context, 'Unable to open the saved statement file.');
       }
     } catch (_) {
-      if (company != null && trips != null && transactions != null) {
+      if (ship != null && trips != null && transactions != null) {
         Get.to(
-          () => CompanyStatementPreviewPage(
-            company: company,
+          () => ShipStatementPreviewPage(
+            ship: ship,
             trips: trips,
             transactions: transactions,
           ),
@@ -155,8 +155,8 @@ class CompanyStatementUtil {
     }
   }
 
-  static Future<Uint8List> buildCompanyStatementPdf({
-    required CompanyModel company,
+  static Future<Uint8List> buildShipStatementPdf({
+    required ShipModel ship,
     required List<trip_models.TripModel> trips,
     required List<tx_models.TransactionModel> transactions,
     String? appliedFiltersLabel,
@@ -164,14 +164,14 @@ class CompanyStatementUtil {
     final ledger = _buildLedger(trips, transactions);
     final generatedAt = DateTime.now();
     final theme = await _buildPdfTheme();
-    final companyName = _safe(company.name);
-    final organizationName = await _resolveOrganizationName(companyName);
+    final shipName = _safe(ship.name);
+    final organizationName = await _resolveOrganizationName(shipName);
 
     final pdf = pw.Document(
-      title: 'Company Statement',
+      title: 'Ship Statement',
       author: 'MarineLedger',
       creator: 'MarineLedger App',
-      subject: 'Company statement ledger (debit/credit/balance)',
+      subject: 'Ship statement ledger (debit/credit/balance)',
     );
 
     final dateRange = ledger.entries.isEmpty
@@ -181,7 +181,7 @@ class CompanyStatementUtil {
             ledger.entries.last.displayDate,
           );
     final resolvedAppliedFilters = (appliedFiltersLabel ?? '').trim().isEmpty
-        ? '${_safe(company.name)} | Date Range: ${dateRange.from} to ${dateRange.to}'
+        ? '${_safe(ship.name)} | Date Range: ${dateRange.from} to ${dateRange.to}'
         : appliedFiltersLabel!.trim();
     final entryChunks = _chunkLedgerEntries(ledger.entries);
 
@@ -205,8 +205,8 @@ class CompanyStatementUtil {
             appliedFiltersLabel: resolvedAppliedFilters,
           ),
           pw.SizedBox(height: 14),
-          _buildCompanyInfoSection(
-            company: company,
+          _buildShipInfoSection(
+            ship: ship,
             fromDate: dateRange.from,
             toDate: dateRange.to,
             totalEntries: ledger.entries.length,
@@ -244,7 +244,7 @@ class CompanyStatementUtil {
             closingBalance: _currency(ledger.closingBalance),
           ),
           pw.SizedBox(height: 12),
-          _buildNotesSection(company, ledger),
+          _buildNotesSection(ship, ledger),
         ],
       ),
     );
@@ -252,15 +252,15 @@ class CompanyStatementUtil {
     return pdf.save();
   }
 
-  static String fileNameFor(CompanyModel company) {
+  static String fileNameFor(ShipModel ship) {
     final stamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-    final safeCompanyName = company.name
+    final safeShipName = ship.name
         .trim()
         .replaceAll(RegExp(r'[^\w\s-]'), '')
         .replaceAll(RegExp(r'\s+'), '_');
 
-    final resolvedName = safeCompanyName.isEmpty ? 'company' : safeCompanyName;
-    return 'company_statement_${resolvedName}_$stamp.pdf';
+    final resolvedName = safeShipName.isEmpty ? 'ship' : safeShipName;
+    return 'ship_statement_${resolvedName}_$stamp.pdf';
   }
 
   static pw.Widget _buildHeader({
@@ -323,8 +323,8 @@ class CompanyStatementUtil {
     );
   }
 
-  static pw.Widget _buildCompanyInfoSection({
-    required CompanyModel company,
+  static pw.Widget _buildShipInfoSection({
+    required ShipModel ship,
     required String fromDate,
     required String toDate,
     required int totalEntries,
@@ -335,10 +335,10 @@ class CompanyStatementUtil {
         pw.Expanded(
           flex: 5,
           child: _infoCard(
-            title: 'Company Details',
+            title: 'Ship Details',
             rows: [
-              'Name: ${_safe(company.name)}',
-              'Description: ${_safe(company.description ?? 'N/A')}',
+              'Name: ${_safe(ship.name)}',
+              'License: ${_safe(ship.licenseNumber ?? 'N/A')}',
               'Date Range: $fromDate to $toDate',
             ],
           ),
@@ -625,16 +625,10 @@ class CompanyStatementUtil {
   }
 
   static pw.Widget _buildNotesSection(
-    CompanyModel company,
+    ShipModel ship,
     _LedgerBuildResult ledger,
   ) {
-    final description = (company.description ?? '').trim();
-
-    final interpretation = ledger.closingBalance < 0
-        ? 'Negative balance means receivable remains against the company.'
-        : ledger.closingBalance > 0
-        ? 'Positive balance means extra payment is available.'
-        : 'Zero balance means the account is settled.';
+    final license = (ship.licenseNumber ?? '').trim();
 
     return pw.Container(
       width: double.infinity,
@@ -652,16 +646,12 @@ class CompanyStatementUtil {
           ),
           pw.SizedBox(height: 6),
           pw.Text(
-            description.isEmpty
-                ? 'This statement is generated from trip bills (credit) and company due deductions + payments (debit).'
-                : description,
+            license.isEmpty
+                ? 'This statement is generated from trip bills (credit) and ship due deductions + payments (debit).'
+                : 'Ship license: $license',
             style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
           ),
           pw.SizedBox(height: 8),
-          // pw.Text(
-          //   interpretation,
-          //   style: const pw.TextStyle(fontSize: 9.5, color: PdfColors.grey700),
-          // ),
         ],
       ),
     );
@@ -710,7 +700,7 @@ class CompanyStatementUtil {
         continue;
       }
 
-      if (_isCompanyAddedToDueExpense(tx)) {
+      if (_isShipAddedToDueExpense(tx)) {
         items.add(
           _LedgerRawItem(
             dateRaw: tx.date,
@@ -1050,7 +1040,7 @@ class CompanyStatementUtil {
     return normalizedSource == 'main-balance';
   }
 
-  static bool _isCompanyAddedToDueExpense(tx_models.TransactionModel tx) {
+  static bool _isShipAddedToDueExpense(tx_models.TransactionModel tx) {
     return _isExpense(tx) && !_isMainBalanceExpense(tx);
   }
 
@@ -1139,7 +1129,7 @@ class CompanyStatementUtil {
   static Future<void> _showSaveSuccessModal(
     BuildContext context,
     GeneratedFileSaveResult savedFile,
-    CompanyModel company,
+    ShipModel ship,
     List<trip_models.TripModel> trips,
     List<tx_models.TransactionModel> transactions,
   ) async {
@@ -1208,7 +1198,7 @@ class CompanyStatementUtil {
                     );
                     await openDownloadedStatement(
                       savedFile,
-                      company: company,
+                      ship: ship,
                       trips: trips,
                       transactions: transactions,
                     );
@@ -1276,21 +1266,21 @@ class CompanyStatementUtil {
   }
 }
 
-class CompanyStatementPreviewPage extends StatelessWidget {
-  const CompanyStatementPreviewPage({
+class ShipStatementPreviewPage extends StatelessWidget {
+  const ShipStatementPreviewPage({
     super.key,
-    required this.company,
+    required this.ship,
     required this.trips,
     required this.transactions,
   });
 
-  final CompanyModel company;
+  final ShipModel ship;
   final List<trip_models.TripModel> trips;
   final List<tx_models.TransactionModel> transactions;
 
   @override
   Widget build(BuildContext context) {
-    final ledger = CompanyStatementUtil._buildLedger(trips, transactions);
+    final ledger = ShipStatementUtil._buildLedger(trips, transactions);
 
     return Scaffold(
       appBar: AppBar(
@@ -1299,8 +1289,8 @@ class CompanyStatementPreviewPage extends StatelessWidget {
           IconButton(
             tooltip: 'Save',
             icon: const Icon(Icons.download_outlined),
-            onPressed: () => CompanyStatementUtil.saveCompanyStatementAndNotify(
-              company: company,
+            onPressed: () => ShipStatementUtil.saveShipStatementAndNotify(
+              ship: ship,
               trips: trips,
               transactions: transactions,
             ),
@@ -1310,7 +1300,7 @@ class CompanyStatementPreviewPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _previewHeader(company),
+          _previewHeader(ship),
           const SizedBox(height: 12),
           _previewSummary(ledger),
           const SizedBox(height: 14),
@@ -1326,7 +1316,7 @@ class CompanyStatementPreviewPage extends StatelessWidget {
                 color: Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Text('No ledger entries found for this company.'),
+              child: const Text('No ledger entries found for this ship.'),
             )
           else
             ...ledger.entries.map(_previewEntryCard),
@@ -1336,7 +1326,7 @@ class CompanyStatementPreviewPage extends StatelessWidget {
     );
   }
 
-  Widget _previewHeader(CompanyModel company) {
+  Widget _previewHeader(ShipModel ship) {
     final now = DateTime.now();
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1348,7 +1338,7 @@ class CompanyStatementPreviewPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'COMPANY STATEMENT',
+            'SHIP STATEMENT',
             style: TextStyle(
               color: Colors.white,
               fontSize: 22,
@@ -1358,7 +1348,7 @@ class CompanyStatementPreviewPage extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            CompanyStatementUtil._safe(company.name),
+            ShipStatementUtil._safe(ship.name),
             style: const TextStyle(color: Colors.white, fontSize: 12),
           ),
           const SizedBox(height: 2),
@@ -1403,11 +1393,11 @@ class CompanyStatementPreviewPage extends StatelessWidget {
 
     return Row(
       children: [
-        box('Debit', CompanyStatementUtil._currency(ledger.totalDebit)),
+        box('Debit', ShipStatementUtil._currency(ledger.totalDebit)),
         const SizedBox(width: 8),
-        box('Credit', CompanyStatementUtil._currency(ledger.totalCredit)),
+        box('Credit', ShipStatementUtil._currency(ledger.totalCredit)),
         const SizedBox(width: 8),
-        box('Balance', CompanyStatementUtil._currency(ledger.closingBalance)),
+        box('Balance', ShipStatementUtil._currency(ledger.closingBalance)),
       ],
     );
   }
@@ -1445,7 +1435,7 @@ class CompanyStatementPreviewPage extends StatelessWidget {
                 child: _miniValue(
                   'Debit',
                   entry.debit > 0
-                      ? CompanyStatementUtil._currency(entry.debit)
+                      ? ShipStatementUtil._currency(entry.debit)
                       : '-',
                 ),
               ),
@@ -1453,14 +1443,14 @@ class CompanyStatementPreviewPage extends StatelessWidget {
                 child: _miniValue(
                   'Credit',
                   entry.credit > 0
-                      ? CompanyStatementUtil._currency(entry.credit)
+                      ? ShipStatementUtil._currency(entry.credit)
                       : '-',
                 ),
               ),
               Expanded(
                 child: _miniValue(
                   'Balance',
-                  CompanyStatementUtil._currency(entry.balance),
+                  ShipStatementUtil._currency(entry.balance),
                 ),
               ),
             ],
@@ -1502,7 +1492,7 @@ class _LedgerRawItem {
     required this.debit,
     required this.credit,
     required this.kindOrder,
-  }) : parsedDate = CompanyStatementUtil._tryParseDate(dateRaw),
+  }) : parsedDate = ShipStatementUtil._tryParseDate(dateRaw),
        displayDate = _resolveDisplayDate(dateRaw);
 
   final String dateRaw;
@@ -1515,7 +1505,7 @@ class _LedgerRawItem {
   final String displayDate;
 
   static String _resolveDisplayDate(String rawDate) {
-    final parsed = CompanyStatementUtil._tryParseDate(rawDate);
+    final parsed = ShipStatementUtil._tryParseDate(rawDate);
     if (parsed != null) {
       return DateFormat('dd MMM yyyy').format(parsed);
     }

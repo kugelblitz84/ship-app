@@ -8,6 +8,8 @@ class CompanyModel {
   String totalAmountBilled;
   String totalAmountReceived;
   String totalAmountDue;
+  String? openingDueAmount;
+  String? openingDueDate;
 
   CompanyModel({
     required this.name,
@@ -16,6 +18,8 @@ class CompanyModel {
     this.totalAmountBilled = '0',
     this.totalAmountReceived = '0',
     this.totalAmountDue = '0',
+    this.openingDueAmount,
+    this.openingDueDate,
   });
 
   factory CompanyModel.fromMap(Map<String, dynamic> map) {
@@ -48,6 +52,12 @@ class CompanyModel {
       totalAmountDue: readString(map['totalAmountDue']).trim().isNotEmpty
           ? readString(map['totalAmountDue']).trim()
           : '0',
+      openingDueAmount: readString(map['openingDueAmount']).trim().isEmpty
+          ? null
+          : readString(map['openingDueAmount']).trim(),
+      openingDueDate: readString(map['openingDueDate']).trim().isEmpty
+          ? null
+          : readString(map['openingDueDate']).trim(),
     );
   }
 }
