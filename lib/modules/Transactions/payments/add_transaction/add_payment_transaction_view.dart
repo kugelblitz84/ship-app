@@ -49,7 +49,7 @@ class AddTransactionView extends GetView<AddTransactionController> {
                   ),
                   SizedBox(height: 6.h),
                   Text(
-                    'Company and ship are required. Linking a trip is optional.',
+                    'Company is required. Ship and trip are optional.',
                     style: AppTextStyles.bodyMedium,
                   ),
                   SizedBox(height: AppSpacing.base),
@@ -290,7 +290,7 @@ class AddTransactionView extends GetView<AddTransactionController> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Ship',
+          'Ship (Optional)',
           style: AppTextStyles.labelMedium.copyWith(
             color: AppColors.textPrimary,
           ),
@@ -299,7 +299,7 @@ class AddTransactionView extends GetView<AddTransactionController> {
         DropdownButtonFormField<String>(
           value: selectedValue,
           decoration: InputDecoration(
-            hintText: isLoading ? 'Loading ships...' : 'Select ship',
+            hintText: isLoading ? 'Loading ships...' : 'Select ship (optional)',
             prefixIcon: const Icon(Icons.directions_boat_rounded),
           ),
           icon: const Icon(Icons.keyboard_arrow_down_rounded),

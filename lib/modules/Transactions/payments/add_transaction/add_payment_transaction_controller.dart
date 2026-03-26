@@ -216,9 +216,7 @@ class AddTransactionController extends GetxController {
   }
 
   String? shipValidator(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Ship is required';
-    }
+    // Ship is optional for payments.
     return null;
   }
 
@@ -369,10 +367,6 @@ class AddTransactionController extends GetxController {
       showAppSnackbar('Error', 'Please select a company');
       return;
     }
-    if (selectedShip == null) {
-      showAppSnackbar('Error', 'Please select a ship');
-      return;
-    }
     if ((selectedType.value ?? '').trim().isEmpty) {
       showAppSnackbar('Error', 'Please select a transaction type');
       return;
@@ -390,7 +384,7 @@ class AddTransactionController extends GetxController {
         transactionType: 'payment',
         companyAndShipInfo: CompanyAndShipInfo(
           companyName: company.name,
-          shipName: selectedShip!.name,
+          shipName: selectedShip?.name ?? '',
         ),
         tripId: linkedTrip?.tripId ?? '',
         tripFrom: linkedTrip?.from ?? '',
