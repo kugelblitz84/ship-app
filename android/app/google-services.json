@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "773719865331",
-    "project_id": "urgent-7e53b",
-    "storage_bucket": "urgent-7e53b.firebasestorage.app"
+    "project_number": "236205215184",
+    "project_id": "ship-app-72e40",
+    "storage_bucket": "ship-app-72e40.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:773719865331:android:12b58f0a59b33d2780c486",
+        "mobilesdk_app_id": "1:236205215184:android:7e7a9eb749eb169d73fdd5",
         "android_client_info": {
           "package_name": "com.example.urgent"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAAL2p9A8Z-Wa9dY7qdhnxEvulMp6UhW0c"
+          "current_key": "AIzaSyCpcGS9wQiFvQF7wFSSevep8LgxoRvzOE8"
         }
       ],
       "services": {
